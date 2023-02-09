@@ -32,20 +32,20 @@ def generate_launch_description():
         'json_info_generator_params.yaml'
     )
 
-    ros_namespace = LaunchConfiguration('ros_namespace')
+    namespace = LaunchConfiguration('namespace')
 
     json_info_generator_node = Node(
         name='json_info_generator_node',
         package='isaac_ros_json_info_generator',
         executable='json_info_generator_node',
         parameters=[config],
-        namespace=ros_namespace,
+        namespace=namespace,
         remappings=[('ros_sub_topic', 'agv_state')],
         output='screen'
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument('ros_namespace', default_value='',
+        DeclareLaunchArgument('namespace', default_value='',
                               description='Namespace for ROS nodes in this launch script'),
         json_info_generator_node
     ])

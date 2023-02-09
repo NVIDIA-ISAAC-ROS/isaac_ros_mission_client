@@ -212,14 +212,14 @@ This launch script under the launch directory brings up the MQTT bridge nodes an
 #### Usage
 
 ```bash
-ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_client.launch.py ros_namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_transport:=<"mqtt_transport"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
+ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_client.launch.py namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_transport:=<"mqtt_transport"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
 ```
 
 #### ROS Parameters
 
 | ROS Parameter         | Type     | Default                    | Description                                                                                                                                                |
 | --------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ros_namespace`       | `string` | `""(Empty string)`         | The ROS namespace used for the ROS graph. <br/> e.g. `carter`                                                                                              |
+| `namespace`           | `string` | `""(Empty string)`         | The ROS namespace used for the ROS graph. <br/> e.g. `carter`                                                                                              |
 | `mqtt_host_name`      | `string` | `localhost`                | The MQTT broker IP to connect to.  <br/> e.g. `192.168.25.32`                                                                                              |
 | `mqtt_port`           | `string` | `1883`                     | The MQTT broker port                                                                                                                                       |
 | `mqtt_transport`      | `string` | `tcp`                      | The protocol to use for sending MQTT messages (either `tcp` or `websockets`)                                                                               |
@@ -242,7 +242,7 @@ Besides launching `isaac_ros_vda5050_client.py`, this launch script also launche
 #### Usage
 
 ```bash
-ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_nav2_client.launch.py ros_namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
+ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_nav2_client.launch.py namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
 ```
 
 #### ROS Parameters
