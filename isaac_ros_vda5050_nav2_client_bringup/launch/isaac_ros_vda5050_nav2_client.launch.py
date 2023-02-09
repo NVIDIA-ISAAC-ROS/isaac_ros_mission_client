@@ -31,7 +31,7 @@ def generate_launch_description():
     """Generate launch description for VDA5050 Nav2 Client node."""
     launch_args = [
         DeclareLaunchArgument(
-            'ros_namespace',
+            'namespace',
             default_value='',
             description='Namespace for ROS nodes in this launch script'),
         DeclareLaunchArgument(
@@ -87,7 +87,7 @@ def generate_launch_description():
             default_value='False',
             description='Launch RViz if set to True'),
     ]
-    ros_namespace = LaunchConfiguration('ros_namespace')
+    namespace = LaunchConfiguration('namespace')
     use_namespace = LaunchConfiguration('use_namespace')
     use_composition = LaunchConfiguration('use_composition')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -123,7 +123,7 @@ def generate_launch_description():
         package='isaac_ros_json_info_generator',
         executable='json_info_generator_node',
         parameters=[info_generator_params_file],
-        namespace=ros_namespace,
+        namespace=namespace,
         remappings=[('ros_sub_topic', 'agv_state')],
         output='screen'
     )
@@ -132,7 +132,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             [nav2_bringup_launch_dir, '/bringup_launch.py']),
         launch_arguments={
-            'namespace': ros_namespace,
+            'namespace': namespace,
             'use_namespace': use_namespace,
             'use_composition': use_composition,
             'map': map_dir,
@@ -148,7 +148,7 @@ def generate_launch_description():
     rviz_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(nav2_bringup_launch_dir, 'rviz_launch.py')),
         condition=IfCondition(launch_rviz),
-        launch_arguments={'namespace': ros_namespace,
+        launch_arguments={'namespace': namespace,
                           'use_namespace': use_namespace,
                           'rviz_config': rviz_config_dir}.items(),
     )

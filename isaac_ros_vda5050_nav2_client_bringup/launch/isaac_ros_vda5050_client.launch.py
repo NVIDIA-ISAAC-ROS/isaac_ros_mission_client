@@ -25,7 +25,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     """Generate launch description for VDA5050 Nav2 Client node."""
     launch_args = [
-        DeclareLaunchArgument('ros_namespace', default_value='',
+        DeclareLaunchArgument('namespace', default_value='',
                               description='Namespace for ROS nodes in this launch script'),
         DeclareLaunchArgument('mqtt_host_name', default_value='localhost',
                               description='MQTT broker IP to connect to'),
@@ -59,7 +59,7 @@ def generate_launch_description():
                               description='Launch ROS scene recorder if true')
     ]
 
-    ros_namespace = LaunchConfiguration('ros_namespace')
+    namespace = LaunchConfiguration('namespace')
     mqtt_host_name = LaunchConfiguration('mqtt_host_name')
     mqtt_transport = LaunchConfiguration('mqtt_transport')
     mqtt_pub_topic = LaunchConfiguration('mqtt_pub_topic')
@@ -75,7 +75,7 @@ def generate_launch_description():
     ros_recorder = LaunchConfiguration('ros_recorder')
 
     client_node = Node(
-        namespace=ros_namespace,
+        namespace=namespace,
         name='nav2_client_node',
         package='isaac_ros_vda5050_nav2_client',
         executable='vda5050_nav2_client',
@@ -103,7 +103,7 @@ def generate_launch_description():
             'reconnect_period': reconnect_period,
             'num_retries': num_retries
         }],
-        namespace=ros_namespace,
+        namespace=namespace,
         remappings=[('ros_sub_topic', 'agv_state')],
         output='screen'
     )
@@ -123,13 +123,13 @@ def generate_launch_description():
             'reconnect_period': reconnect_period,
             'num_retries': num_retries
         }],
-        namespace=ros_namespace,
+        namespace=namespace,
         remappings=[('bridge_pub_topic', 'client_commands')],
         output='screen'
     )
 
     recorder_node = Node(
-        namespace=ros_namespace,
+        namespace=namespace,
         name='recorder_action_server',
         package='isaac_ros_scene_recorder',
         executable='scene_recorder',

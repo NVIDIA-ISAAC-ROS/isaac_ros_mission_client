@@ -2,6 +2,12 @@
 
 <div align="center"><img alt="Architecture" src="resources/architecture.png" width="650px"/></div>
 
+---
+## Webinar Available
+Learn how to use this package by watching our on-demand webinar: [Build Connected Robots with NVIDIA Isaac Dispatch and Client](https://gateway.on24.com/wcc/experience/elitenvidiabrill/1407606/3998202/isaac-ros-webinar-series)
+
+---
+
 ## Overview
 
 This repository provides the ROS2 packages for Mission Client, which communicates to a robot fleet management service. Mission Client receives tasks and actions from the fleet management service and updates its progress, state, and errors. Mission Client performs navigation actions with [Nav2](https://github.com/ros-planning/navigation2) and can be integrated with other ROS actions.
@@ -13,6 +19,7 @@ Mission Client is provided with a matching Mission Dispatch available [here](htt
 ## Table of Contents
 
 - [Isaac ROS Mission Client](#isaac-ros-mission-client)
+  - [Webinar Available](#webinar-available)
   - [Overview](#overview)
   - [Table of Contents](#table-of-contents)
   - [Latest Update](#latest-update)
@@ -22,13 +29,13 @@ Mission Client is provided with a matching Mission Dispatch available [here](htt
     - [Tutorial Walkthrough](#tutorial-walkthrough)
     - [Customize your Dev Environment](#customize-your-dev-environment)
   - [Package Reference](#package-reference)
-    - [isaac_ros_mission_client](#isaac_ros_mission_client)
+    - [isaac\_ros\_mission\_client](#isaac_ros_mission_client)
       - [Usage](#usage)
       - [ROS Parameters](#ros-parameters)
-    - [isaac_ros_vda5050_nav2_client](#isaac_ros_vda5050_nav2_client)
+    - [isaac\_ros\_vda5050\_nav2\_client](#isaac_ros_vda5050_nav2_client)
       - [Usage](#usage-1)
       - [ROS Parameters](#ros-parameters-1)
-    - [isaac_ros_scene_recorder](#isaac_ros_scene_recorder)
+    - [isaac\_ros\_scene\_recorder](#isaac_ros_scene_recorder)
       - [Usage](#usage-2)
   - [Troubleshooting](#troubleshooting)
     - [Isaac ROS Troubleshooting](#isaac-ros-troubleshooting)
@@ -205,14 +212,14 @@ This launch script under the launch directory brings up the MQTT bridge nodes an
 #### Usage
 
 ```bash
-ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_client.launch.py ros_namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_transport:=<"mqtt_transport"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
+ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_client.launch.py namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_transport:=<"mqtt_transport"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
 ```
 
 #### ROS Parameters
 
 | ROS Parameter         | Type     | Default                    | Description                                                                                                                                                |
 | --------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ros_namespace`       | `string` | `""(Empty string)`         | The ROS namespace used for the ROS graph. <br/> e.g. `carter`                                                                                              |
+| `namespace`           | `string` | `""(Empty string)`         | The ROS namespace used for the ROS graph. <br/> e.g. `carter`                                                                                              |
 | `mqtt_host_name`      | `string` | `localhost`                | The MQTT broker IP to connect to.  <br/> e.g. `192.168.25.32`                                                                                              |
 | `mqtt_port`           | `string` | `1883`                     | The MQTT broker port                                                                                                                                       |
 | `mqtt_transport`      | `string` | `tcp`                      | The protocol to use for sending MQTT messages (either `tcp` or `websockets`)                                                                               |
@@ -235,7 +242,7 @@ Besides launching `isaac_ros_vda5050_client.py`, this launch script also launche
 #### Usage
 
 ```bash
-ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_nav2_client.launch.py ros_namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
+ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_nav2_client.launch.py namespace:=<"namespace for ros graph"> mqtt_host_name:=<"mqtt_host_name"> mqtt_pub_topic:=<"mqtt_pub_topic"> ros_subscriber_type:=<"ros_subscriber_type"> ros_to_mqtt_name:=<"ros_to_mqtt_name"> mqtt_sub_topic:=<"mqtt_sub_topic"> ros_publisher_type:=<"ros_publisher_type"> mqtt_to_ros_name:=<"mqtt_to_ros_name">
 ```
 
 #### ROS Parameters
