@@ -55,9 +55,9 @@ def generate_launch_description():
             default_value='0.0',
             description='Initial position Y coordinate'),
         DeclareLaunchArgument(
-            'init_pose_z',
+            'init_pose_yaw',
             default_value='0.0',
-            description='Initial position Z coordinate'),
+            description='Initial yaw orientation'),
         DeclareLaunchArgument(
             'map',
             default_value=os.path.join(
@@ -142,7 +142,8 @@ def generate_launch_description():
 
     mission_client_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([mission_client_launch_dir,
-                                       '/isaac_ros_vda5050_client.launch.py'])
+                                       '/isaac_ros_vda5050_client.launch.py']),
+        launch_arguments={'namespace': namespace}.items()
     )
 
     rviz_launch = IncludeLaunchDescription(
