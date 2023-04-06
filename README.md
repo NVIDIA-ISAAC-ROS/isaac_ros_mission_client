@@ -10,7 +10,7 @@ Learn how to use this package by watching our on-demand webinar: [Build Connecte
 
 ## Overview
 
-This repository provides the ROS2 packages for Mission Client, which communicates to a robot fleet management service. Mission Client receives tasks and actions from the fleet management service and updates its progress, state, and errors. Mission Client performs navigation actions with [Nav2](https://github.com/ros-planning/navigation2) and can be integrated with other ROS actions.
+This repository provides the ROS 2 packages for Mission Client, which communicates to a robot fleet management service. Mission Client receives tasks and actions from the fleet management service and updates its progress, state, and errors. Mission Client performs navigation actions with [Nav2](https://github.com/ros-planning/navigation2) and can be integrated with other ROS actions.
 
 The communication to Mission Client is based on the [VDA5050 protocol](https://github.com/VDA5050/VDA5050/blob/main/VDA5050_EN.md) and uses MQTT fundamentals as the industry standard for a highly efficient, scalable protocol for connecting devices over the Internet.
 
@@ -43,23 +43,23 @@ Mission Client is provided with a matching Mission Dispatch available [here](htt
 
 ## Latest Update
 
-Update 2022-10-19: Initial release
+Update 2023-04-05: Update to be compatible with JetPack 5.1.1
 
 ## Supported Platforms
 
-This package is designed and tested to be compatible with ROS2 Humble running on [Jetson](https://developer.nvidia.com/embedded-computing) or an x86_64 system.
+This package is designed and tested to be compatible with ROS 2 Humble running on [Jetson](https://developer.nvidia.com/embedded-computing) or an x86_64 system.
 
 | Platform | Hardware                                                                                                                                                                                                 | Software                                                       | Notes                                                                                                                                                                                   |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Jetson   | [Jetson Orin](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/) <br> [Jetson Xavier](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-agx-xavier/) | [JetPack 5.0.2](https://developer.nvidia.com/embedded/jetpack) | For best performance, ensure that [power settings](https://docs.nvidia.com/jetson/archives/r34.1/DeveloperGuide/text/SD/PlatformPowerAndPerformance.html) are configured appropriately. |
+| Jetson   | [Jetson Orin](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/) <br> [Jetson Xavier](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-agx-xavier/) | [JetPack 5.1.1](https://developer.nvidia.com/embedded/jetpack) | For best performance, ensure that [power settings](https://docs.nvidia.com/jetson/archives/r34.1/DeveloperGuide/text/SD/PlatformPowerAndPerformance.html) are configured appropriately. |
 | x86_64   | x86 CPU                                                                                                                                                                                                  | [Ubuntu 20.04+](https://releases.ubuntu.com/20.04/)            |
-> **Note:** Mission Client does not require GPU.
+> **Note**: Mission Client does not require GPU.
 
 ### Docker
 
 To simplify development, we strongly recommend leveraging the Isaac ROS Dev Docker images by following [these steps](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common/blob/main/docs/dev-env-setup.md). This will streamline your development environment setup with the correct versions of dependencies on both Jetson and x86_64 platforms.
 
-> **Note:** All Isaac ROS quick-start guides, tutorials, and examples have been designed with the Isaac ROS Docker images as a prerequisite.
+> **Note**: All Isaac ROS quick-start guides, tutorials, and examples have been designed with the Isaac ROS Docker images as a prerequisite.
 
 ## Tutorial with Isaac Sim
 
@@ -79,7 +79,7 @@ This tutorial will walk you through steps to send missions from [Mission Dispatc
    `omniverse://localhost/NVIDIA/Assets/Isaac/2022.1/Isaac/Samples/ROS2/Scenario/carter_warehouse_apriltags_worker.usd`
 
    Wait for the scene to load completely.
-   > **Note:** To use a different server, replace `localhost` with `<your_nucleus_server>`
+   > **Note**: To use a different server, replace `localhost` with `<your_nucleus_server>`
 3. Press **Play** to start publishing data from Isaac Sim.
 
    <div align="center"><img src="resources/Isaac_sim_init_screen.png" width="800px"/></div>
@@ -103,6 +103,7 @@ This tutorial will walk you through steps to send missions from [Mission Dispatc
 6. Start MQTT broker
 
     The MQTT broker is used for communication between the Mission Dispatch and the robots. There are many ways to run an MQTT broker, including as a system daemon, a standalone application, or a Docker container. Here we use `mosquitto` as our MQTT broker. Start the `mosquitto` broker by running the following:
+
     ```bash
     cd ~/workspaces/isaac_ros-dev/src/isaac_ros_mission_client
     docker run -it --network host -v ${PWD}/utils/mosquitto.sh:/mosquitto.sh -d eclipse-mosquitto:latest sh mosquitto.sh 1883 9001
@@ -135,44 +136,47 @@ This tutorial will walk you through steps to send missions from [Mission Dispatc
     ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_nav2_client.launch.py
     ```
 11. Start [Mission Dispatch](https://github.com/NVIDIA-ISAAC/isaac_mission_dispatch) with Docker.
-- Postgres database
+    - Postgres database
 
-    Set the following environment variable:
+      Set the following environment variable:
 
-    ```bash
-    export POSTGRES_PASSWORD=<Any password>
-    ```
+      ```bash
+      export POSTGRES_PASSWORD=<Any password>
+      ```
 
-    Start the Postgres database by running the following:
+      Start the Postgres database by running the following:
 
-    ```bash
-    docker run --rm --name postgres \
-      --network host \
-      -p 5432:5432 \
-      -e POSTGRES_USER=postgres \
-      -e POSTGRES_PASSWORD \
-      -e POSTGRES_DB=mission \
-      -d postgres:14.5
-    ```
-- Launch the Mission Database microservice:
+      ```bash
+      docker run --rm --name postgres \
+        --network host \
+        -p 5432:5432 \
+        -e POSTGRES_USER=postgres \
+        -e POSTGRES_PASSWORD \
+        -e POSTGRES_DB=mission \
+        -d postgres:14.5
+      ```
+    - Launch the Mission Database microservice:
 
-    Start the API and database server with the official Docker container.
-    ```bash
-    docker run -it --network host nvcr.io/nvidia/isaac/mission-database:2022.10.17_de4892b
+      Start the API and database server with the official Docker container.
 
-    # To see what configuration options are, run
-    # docker run -it --network host nvcr.io/nvidia/isaac/mission-database:2022.10.17_de4892b --help
-    # For example, if you want to change the port for the user API from the default 5000 to 5002, add `--port 5002` configuration option in the command.
-    ```
-- Launch the Mission Dispatch microservice:
+      ```bash
+      docker run -it --network host nvcr.io/nvidia/isaac/mission-database:2022.10.17_de4892b
 
-  Start the Mission Dispatch server with the official Docker container.
-    ```bash
-    docker run -it --network host nvcr.io/nvidia/isaac/mission-dispatch:2022.10.17_de4892b
-    # To see what configuration options are, add --help option after the command.
-    ```
+      # To see what configuration options are, run
+      # docker run -it --network host nvcr.io/nvidia/isaac/mission-database:2022.10.17_de4892b --help
+      # For example, if you want to change the port for the user API from the default 5000 to 5002, add `--port 5002` configuration option in the command.
+      ```
+    - Launch the Mission Dispatch microservice:
 
-  > **Note:** Read [this tutorial](https://github.com/NVIDIA-ISAAC/isaac_mission_dispatch#getting-started-with-deployment-recommended) for more deployment options for Mission Dispatch.
+      Start the Mission Dispatch server with the official Docker container.
+
+      ```bash
+      docker run -it --network host nvcr.io/nvidia/isaac/mission-dispatch:2022.10.17_de4892b
+
+      # To see what configuration options are, add --help option after the command.
+      ```
+
+      > **Note**: Read [this tutorial](https://github.com/NVIDIA-ISAAC/isaac_mission_dispatch#getting-started-with-deployment-recommended) for more deployment options for Mission Dispatch.
 
 12. Open `http://localhost:5000/docs` in a web browser.
 13. Use the `POST /robots` endpoint to create robot objects. See the video below for exact steps.
@@ -180,7 +184,7 @@ This tutorial will walk you through steps to send missions from [Mission Dispatc
     endpoint. If the robots are connected, the state should reflect the actual position of the robots.
 
     https://user-images.githubusercontent.com/77975110/196787009-4e19199c-deb7-4bee-9f21-bda06b4791b0.mp4
-    > **Note:** When using the interactive documentation page, the default value for the the robot object
+    > **Note**: When using the interactive documentation page, the default value for the the robot object
     `name` in the `spec` is 'string', so make sure to change it from 'string' to another name that has
     more meaning, like 'carter01'. Make sure to delete the `prefix` entry as shown in the video.
 
@@ -188,12 +192,12 @@ This tutorial will walk you through steps to send missions from [Mission Dispatc
 
     https://user-images.githubusercontent.com/77975110/196791774-060749d6-4274-4d6d-8380-cff6207bfed6.mp4
 
-    > **Note:** By default, the value for the `robot` is 'string', so make sure to change it to
+    > **Note**: By default, the value for the `robot` is 'string', so make sure to change it to
     the `name` you used for one of the robot objects you created earlier. For example, if you set the `name` of the robot
     object to 'carter01', use that to fill in the `robot` field for the mission. Also make sure to delete the `prefix`,
     `selector`, `sequence` and `action` entries as shown in the video.
 
-    >**Note:** Mission Client cannot cancel or update a running mission and will disregard incoming missions if it is busy.
+    >**Note**: Mission Client cannot cancel or update a running mission and will disregard incoming missions if it is busy.
 
 16. Go back to the Isaac Sim screen. You should see the robot move to the set goal position, as shown below.
 
@@ -254,7 +258,7 @@ ros2 launch isaac_ros_vda5050_nav2_client_bringup isaac_ros_vda5050_nav2_client.
 | `use_sim_time`               | `bool`   | `false`                                                                                                                                          | Whether to use simulation (Omniverse Isaac Sim) clock           |
 | `init_pose_x`                | `float`  | `0.0`                                                                                                                                            | The initial position X coordinate                               |
 | `init_pose_y`                | `float`  | `0.0`                                                                                                                                            | The initial position Y coordinate                               |
-| `init_pose_yaw`                | `float`  | `0.0`                                                                                                                                            | The initial yaw orientation                               |
+| `init_pose_yaw`              | `float`  | `0.0`                                                                                                                                            | The initial yaw orientation                                     |
 | `map`                        | `string` | `/home/$USER/workspaces/isaac_ros-dev/src/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client_bringup/maps/carter_warehouse_navigation.yaml`  | The full path to the occupancy map file to load                 |
 | `nav_params_file`            | `string` | `/home/$USER/workspaces/isaac_ros-dev/src/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client_bringup/config/carter_navigation_params.yaml`   | The full path to the navigation parameter file to load          |
 | `info_generator_params_file` | `string` | `/home/$USER/workspaces/isaac_ros-dev/src/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client_bringup/config/json_info_generator_params.yaml` | The full path to the JSON Info Generator parameter file to load |
@@ -280,7 +284,7 @@ To run Mission Client with the recorder, set the `ros_recorder` launch file para
 
 To start the recorder, post a mission from mission dispatch. Here is an example mission:
 
-  ```bash
+  ```json
   {
     "robot": "carter01",
     "mission_tree": [
@@ -304,7 +308,7 @@ The `action_type` should be `start_recording` and the parameters `path, topics, 
 
 To stop the recorder, post a mission with action of type `stop_recording` from Mission Dispatch. Here is an example:
 
-  ```bash
+  ```json
   {
     "robot": "carter01",
     "mission_tree": [
@@ -331,6 +335,7 @@ For solutions to problems with Isaac ROS, please check [here](https://github.com
 
 ## Updates
 
-| Date       | Changes         |
-| ---------- | --------------- |
-| 2022-10-19 | Initial release |
+| Date       | Changes                                    |
+| ---------- | ------------------------------------------ |
+| 2023-04-05 | Update to be compatible with JetPack 5.1.1 |
+| 2022-10-19 | Initial release                            |

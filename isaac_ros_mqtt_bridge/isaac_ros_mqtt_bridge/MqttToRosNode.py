@@ -69,6 +69,7 @@ class MqttToRosNode(Node):
 
         def on_mqtt_connect(client, userdata, flags, rc):
             self.get_logger().info(f'Connected with result code {str(rc)}')
+            self.mqtt_client.subscribe(self.get_parameter('mqtt_sub_topic').value)
 
         def on_mqtt_disconnect(client, userdata, rc):
             if rc != 0:
@@ -129,7 +130,6 @@ class MqttToRosNode(Node):
                 time.sleep(self.get_parameter('reconnect_period').value)
                 retries += 1
         if connected:
-            self.mqtt_client.subscribe(self.get_parameter('mqtt_sub_topic').value)
             self.mqtt_client.loop_start()
         else:
             self.get_logger().error('Failed to connect to MQTT broker, ending retries.')

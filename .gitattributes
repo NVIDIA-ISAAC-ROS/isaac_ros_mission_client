@@ -1,6 +1,9 @@
 # Videos
 *.mp4 filter=lfs diff=lfs merge=lfs -text
 
+# Ignore Python files in linguist
+*.py linguist-detectable=false
+
 # Images
 *.gif filter=lfs diff=lfs merge=lfs -text
 *.jpg filter=lfs diff=lfs merge=lfs -text
