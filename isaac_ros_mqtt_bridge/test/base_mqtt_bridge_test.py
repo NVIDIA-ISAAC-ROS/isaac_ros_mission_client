@@ -41,7 +41,7 @@ class BaseMqttBridgeTest(IsaacROSBaseTest):
         """
         Test for RosToMqtt Bridge node.
 
-        This test creates a ROS2 String publisher and an MQTT subscriber. The string publisher
+        This test creates a ROS 2 String publisher and an MQTT subscriber. The string publisher
         will publish to a topic that the RosToMqtt Bridge node subscribes to, and the bridge
         node will translate that into a JSON message and publish it to MQTT, which the MQTT
         subscriber will receive.

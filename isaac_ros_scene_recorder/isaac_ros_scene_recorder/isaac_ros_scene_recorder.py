@@ -20,12 +20,12 @@
 """Node to record a ROS bag with action.
 
 Example call:
-ROS2 action send_goal recorder isaac_ros_vda5050_nav2_client/action/MissionAction \
+ROS 2 action send_goal recorder isaac_ros_vda5050_nav2_client/action/MissionAction \
 "{keys: [], values: ['start_recording', 'data/bag_name', '/msg1 /msg2', '30']}"
-ROS2 action send_goal recorder isaac_ros_vda5050_nav2_client/action/MissionAction \
+ROS 2 action send_goal recorder isaac_ros_vda5050_nav2_client/action/MissionAction \
 "{values: ['stop_recording']}"
 Remap the action when starting the node:
-ROS2 run isaac_ros_scene_recorder scene_recorder --ros-args --remap recorder:=new_action_name
+ROS 2 run isaac_ros_scene_recorder scene_recorder --ros-args --remap recorder:=new_action_name
 """
 import os
 
