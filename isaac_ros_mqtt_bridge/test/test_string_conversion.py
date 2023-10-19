@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ def test_camel_to_snake():
     assert convert_camel_to_snake('CamelToSnakeCase') == 'camel_to_snake_case'
     assert convert_camel_to_snake(
         'dromedaryToSnakeCase') == 'dromedary_to_snake_case'
-    assert convert_camel_to_snake('getHTTPResponse') == 'get_http_response'
+    assert convert_camel_to_snake('allowedDeviationXY') == 'allowed_deviation_x_y'
     assert convert_snake_to_camel('') == ''
 
 

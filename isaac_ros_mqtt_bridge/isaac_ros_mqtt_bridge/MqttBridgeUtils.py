@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ def convert_camel_to_snake(camel_case_string: str) -> str:
     str
         The new string in snake_case.
     """
-    transformed_str = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', camel_case_string)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', transformed_str).lower()
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', camel_case_string).lower()
 
 
 def convert_snake_to_camel(snake_case_string: str, dromedary: bool = False) -> str:

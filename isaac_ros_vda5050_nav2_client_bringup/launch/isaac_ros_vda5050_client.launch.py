@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ def generate_launch_description():
                               description='MQTT client name for RosToMqtt Node'),
         DeclareLaunchArgument('mqtt_sub_topic', default_value='uagv/v1/carter01/order',
                               description='MQTT topic to subscribe to'),
+        DeclareLaunchArgument('mqtt_sub_instant_actions',
+                              default_value='uagv/v1/carter01/instantActions',
+                              description='MQTT topic to subscribe to'),
         DeclareLaunchArgument('ros_publisher_type', default_value='vda5050_msgs/Order',
                               description='ROS message type to convert received MQTT message to'),
         DeclareLaunchArgument('mqtt_to_ros_name', default_value='Carter01_MqttToRosBridge',
@@ -66,6 +69,7 @@ def generate_launch_description():
     ros_subscriber_type = LaunchConfiguration('ros_subscriber_type')
     ros_to_mqtt_name = LaunchConfiguration('ros_to_mqtt_name')
     mqtt_sub_topic = LaunchConfiguration('mqtt_sub_topic')
+    mqtt_sub_instant_actions = LaunchConfiguration('mqtt_sub_instant_actions')
     ros_publisher_type = LaunchConfiguration('ros_publisher_type')
     mqtt_to_ros_name = LaunchConfiguration('mqtt_to_ros_name')
     mqtt_port = LaunchConfiguration('mqtt_port')
@@ -116,6 +120,7 @@ def generate_launch_description():
             'mqtt_host_name': mqtt_host_name,
             'mqtt_transport': mqtt_transport,
             'mqtt_sub_topic': mqtt_sub_topic,
+            'mqtt_sub_instant_actions': mqtt_sub_instant_actions,
             'ros_publisher_type': ros_publisher_type,
             'mqtt_client_name': mqtt_to_ros_name,
             'mqtt_port': mqtt_port,

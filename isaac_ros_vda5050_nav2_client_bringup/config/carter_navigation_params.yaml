@@ -1,6 +1,5 @@
-%YAML 1.2
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +14,6 @@
 # limitations under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
----
 amcl:
   ros__parameters:
     use_sim_time: True
@@ -35,7 +33,7 @@ amcl:
     laser_max_range: 100.0
     laser_min_range: -1.0
     laser_model_type: "likelihood_field"
-    max_beams: 60
+    max_beams: 360
     max_particles: 2000
     min_particles: 500
     odom_frame_id: "odom"
@@ -43,7 +41,7 @@ amcl:
     pf_z: 0.99
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
-    resample_interval: 1
+    resample_interval: 3
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
     save_pose_rate: 0.5
     sigma_hit: 0.2
@@ -56,12 +54,15 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
+    map_topic: map
     set_initial_pose: true
+    always_reset_initial_pose: false
+    first_map_only: false
     initial_pose:
-      x: 0.0
-      y: 0.0
+      x: -6.0
+      y: -1.0
       z: 0.0
-      yaw: 0.0
+      yaw: 3.14159
 
 amcl_map_client:
   ros__parameters:
@@ -70,15 +71,14 @@ amcl_map_client:
 amcl_rclcpp_node:
   ros__parameters:
     use_sim_time: True
-
 bt_navigator:
   ros__parameters:
     use_sim_time: True
     global_frame: map
     robot_base_frame: base_link
     odom_topic: /odom
-    bt_loop_duration: 10
-    default_server_timeout: 20
+    bt_loop_duration: 20
+    default_server_timeout: 40
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
     # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
@@ -103,7 +103,9 @@ bt_navigator:
     - nav2_rate_controller_bt_node
     - nav2_distance_controller_bt_node
     - nav2_speed_controller_bt_node
+    - nav2_truncate_path_action_bt_node
     - nav2_truncate_path_local_action_bt_node
+    - nav2_goal_updater_node_bt_node
     - nav2_recovery_node_bt_node
     - nav2_pipeline_sequence_bt_node
     - nav2_round_robin_node_bt_node
@@ -130,6 +132,20 @@ bt_navigator_rclcpp_node:
   ros__parameters:
     use_sim_time: True
 
+velocity_smoother:
+  ros__parameters:
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [1.8, 0.0, 1.2]
+    min_velocity: [-1.8, 0.0, -1.2]
+    # deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+    # max_accel: [1.0, 0.0, 1.25]
+    # max_decel: [-1.0, 0.0, -1.25]
+    odom_topic: "odom"
+    odom_duration: 0.1
+
 controller_server:
   ros__parameters:
     use_sim_time: True
@@ -139,7 +155,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
+    goal_checker_plugin: ["stopped_goal_checker"]
     controller_plugins: ["FollowPath"]
 
     # Progress checker parameters
@@ -148,30 +164,23 @@ controller_server:
       required_movement_radius: 0.5
       movement_time_allowance: 10.0
     # Goal checker parameters
-    #precise_goal_checker:
-    #  plugin: "nav2_controller::SimpleGoalChecker"
-    #  xy_goal_tolerance: 0.25
-    #  yaw_goal_tolerance: 0.25
-    #  stateful: True
-    general_goal_checker:
-      stateful: True
-      plugin: "nav2_controller::SimpleGoalChecker"
+    stopped_goal_checker:
+      plugin: "nav2_controller::StoppedGoalChecker"
       xy_goal_tolerance: 0.25
       yaw_goal_tolerance: 0.25
+      stateful: True
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.26
+      max_vel_x: 1.8
       max_vel_y: 0.0
-      max_vel_theta: 1.0
+      max_vel_theta: 1.2
       min_speed_xy: 0.0
-      max_speed_xy: 0.26
+      max_speed_xy: 1.0
       min_speed_theta: 0.0
-      # Add high threshold velocity for turtlebot 3 issue.
-      # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
       acc_lim_x: 2.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
@@ -210,48 +219,65 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
+      footprint_padding: 0.25
       global_frame: odom
       robot_base_frame: base_link
       use_sim_time: True
-      rolling_window: true
-      width: 7
-      height: 7
-      resolution: 0.1
-      robot_radius: 0.36
-      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
+      rolling_window: True
+      width: 10
+      height: 10
+      resolution: 0.05
+      transform_tolerance: 0.3
+      footprint: "[ [0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25] ]"
+      plugins: ["hesai_voxel_layer", "front_rplidar_obstacle_layer", "back_rplidar_obstacle_layer", "inflation_layer"]
+      # plugins: ["hesai_voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.4
-        inflation_radius: 0.32
-      obstacle_layer:
+        enabled: True
+        cost_scaling_factor: 0.3
+        inflation_radius: 1.0
+      hesai_voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        footprint_clearing_enabled: true
+        max_obstacle_height: 2.0
+        publish_voxel_map: False
+        origin_z: 0.0
+        z_voxels: 16
+        z_resolution: 0.2
+        unknown_threshold: 15
+        observation_sources: pointcloud
+        pointcloud:  # no frame set, uses frame from message
+          topic: /front_3d_lidar/point_cloud
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.1
+          obstacle_max_range: 10.0
+          obstacle_min_range: 0.0
+          raytrace_max_range: 10.0
+          raytrace_min_range: 0.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+      front_rplidar_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
         observation_sources: scan
         scan:
-          topic: /scan
+          topic: /front_2d_lidar/scan
           max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "LaserScan"
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
+      back_rplidar_obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
-        observation_sources: pointcloud
-        pointcloud:
-          topic: /point_cloud
+        observation_sources: scan
+        scan:
+          topic: /back_2d_lidar/scan
           max_obstacle_height: 2.0
           clearing: True
           marking: True
-          data_type: "PointCloud2"
-      static_layer:
-        map_subscribe_transient_local: True
-      always_send_full_costmap: True
+          data_type: "LaserScan"
   local_costmap_client:
     ros__parameters:
       use_sim_time: True
@@ -259,18 +285,25 @@ local_costmap:
     ros__parameters:
       use_sim_time: True
 
+
+
 global_costmap:
   global_costmap:
     ros__parameters:
+      footprint_padding: 0.25
       update_frequency: 1.0
-      publish_frequency: 0.5
+      publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: True
-      robot_radius: 0.22
+      footprint: "[ [0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25] ]"
+      # rolling_window: True
+      # width: 200
+      # height: 200
       resolution: 0.05
-      track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
+      # origin_x: -100.0
+      # origin_y: -100.0
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -281,33 +314,17 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 3.0
+          raytrace_max_range: 10.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
+          obstacle_max_range: 10.0
           obstacle_min_range: 0.0
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
-        enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
-        observation_sources: pointcloud
-        pointcloud:
-          topic: /point_cloud
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "PointCloud2"
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        cost_scaling_factor: 0.3
+        inflation_radius: 1.0
       always_send_full_costmap: True
   global_costmap_client:
     ros__parameters:
@@ -319,19 +336,19 @@ global_costmap:
 map_server:
   ros__parameters:
     use_sim_time: True
-    yaml_filename: "turtlebot3_world.yaml"
+    yaml_filename: "carter_warehouse_navigation.yaml"
 
 map_saver:
   ros__parameters:
     use_sim_time: True
-    save_map_timeout: 5.0
+    save_map_timeout: 5000
     free_thresh_default: 0.25
     occupied_thresh_default: 0.65
     map_subscribe_transient_local: True
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    expected_planner_frequency: 10.0
     use_sim_time: True
     planner_plugins: ["GridBased"]
     GridBased:
@@ -358,7 +375,7 @@ behavior_server:
   ros__parameters:
     costmap_topic: local_costmap/costmap_raw
     footprint_topic: local_costmap/published_footprint
-    cycle_frequency: 10.0
+    cycle_frequency: 5.0
     behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
     spin:
       plugin: "nav2_behaviors/Spin"
@@ -370,8 +387,8 @@ behavior_server:
       plugin: "nav2_behaviors/Wait"
     global_frame: odom
     robot_base_frame: base_link
-    transform_tolerance: 0.1
-    use_sim_time: True
+    transform_tolerance: 0.2
+    use_sim_time: true
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
@@ -383,6 +400,7 @@ robot_state_publisher:
 
 waypoint_follower:
   ros__parameters:
+    use_sim_time: True
     loop_rate: 20
     stop_on_failure: false
     waypoint_task_executor_plugin: "wait_at_waypoint"
@@ -390,3 +408,4 @@ waypoint_follower:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: True
       waypoint_pause_duration: 200
+

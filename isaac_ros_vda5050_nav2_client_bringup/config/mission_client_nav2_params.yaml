@@ -31,4 +31,5 @@ mqtt_ros_bridge_node:
   ros__parameters:
     mqtt_host_name: localhost
     mqtt_sub_topic: uagv/v1/carter01/order
+    mqtt_sub_instant_actions: uagv/v1/carter01/instantActions
     ros_publisher_type: vda5050_msgs/Order

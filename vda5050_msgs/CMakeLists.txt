@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ set(msg_files
     "msg/SafetyState.msg"
     "msg/Trajectory.msg"
     "msg/Velocity.msg"
+    "msg/InstantActions.msg"
 )
 
 find_package(rosidl_default_generators REQUIRED)
