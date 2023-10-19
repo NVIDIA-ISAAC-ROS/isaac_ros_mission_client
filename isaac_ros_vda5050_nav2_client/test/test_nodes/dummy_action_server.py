@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
+
+import time
 
 from isaac_ros_vda5050_nav2_client.action import MissionAction
 import rclpy
@@ -44,6 +46,7 @@ class DummyActionServer(Node):
         for key, value in zip(goal_handle.request.keys, goal_handle.request.values):
             params[key] = value
         result.success = params.get('success') == '1'
+        time.sleep(0.2)
         goal_handle.succeed()
         return result
 

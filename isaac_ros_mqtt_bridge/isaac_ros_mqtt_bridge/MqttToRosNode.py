@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ class MqttToRosNode(Node):
             namespace='',
             parameters=[
                 ('mqtt_sub_topic', 'dev/test'),
+                ('mqtt_sub_instant_actions', 'dev/test/instant_actions'),
                 ('mqtt_client_name', 'MqttBridge'),
                 ('mqtt_host_name', 'localhost'),
                 ('mqtt_port', 1883),
@@ -70,6 +71,7 @@ class MqttToRosNode(Node):
         def on_mqtt_connect(client, userdata, flags, rc):
             self.get_logger().info(f'Connected with result code {str(rc)}')
             self.mqtt_client.subscribe(self.get_parameter('mqtt_sub_topic').value)
+            self.mqtt_client.subscribe(self.get_parameter('mqtt_sub_instant_actions').value)
 
         def on_mqtt_disconnect(client, userdata, rc):
             if rc != 0:
@@ -80,9 +82,16 @@ class MqttToRosNode(Node):
 
         def on_mqtt_message(client, userdata, msg):
             try:
+                publisher = None
                 self.get_logger().info(f'From {msg.topic}: {str(msg.payload)}')
-                ros_msg = ros_loader.get_message_instance(
-                    self.get_parameter('ros_publisher_type').value)
+                if msg.topic.endswith('order'):
+                    ros_msg = ros_loader.get_message_instance(
+                        self.get_parameter('ros_publisher_type').value)
+                    publisher = self.publisher
+                if msg.topic.endswith('instantActions'):
+                    ros_msg = ros_loader.get_message_instance('vda5050_msgs/InstantActions')
+                    publisher = self.instant_actions_publisher
+
                 if self.get_parameter('convert_camel_to_snake').value:
                     message_dict = json.loads(str(msg.payload, 'utf-8'))
                     converted_message_dict = convert_dict_keys(
@@ -92,7 +101,8 @@ class MqttToRosNode(Node):
                 else:
                     message_conversion.populate_instance(
                         json.loads(str(msg.payload, 'utf-8')), ros_msg)
-                self.publisher.publish(ros_msg)
+                if publisher:
+                    publisher.publish(ros_msg)
             except (message_conversion.FieldTypeMismatchException,
                     json.decoder.JSONDecodeError) as e:
                 self.get_logger().info(repr(e))
@@ -103,6 +113,10 @@ class MqttToRosNode(Node):
             ros_loader.get_message_class(
                 self.get_parameter('ros_publisher_type').value),
             'bridge_pub_topic', self.get_parameter('ros_publisher_queue').value)
+
+        self.instant_actions_publisher = self.create_publisher(
+            ros_loader.get_message_class('vda5050_msgs/InstantActions'),
+            'instant_actions_commands', self.get_parameter('ros_publisher_queue').value)
 
         max_retries = self.get_parameter('num_retries').value
         retries = 0

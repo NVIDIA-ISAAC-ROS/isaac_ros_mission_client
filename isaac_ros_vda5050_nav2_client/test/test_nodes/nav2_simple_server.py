@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,10 +19,12 @@
 
 import time
 
+from geometry_msgs.msg import TransformStamped
 from nav2_msgs.action import NavigateToPose
 import rclpy
 from rclpy.action import ActionServer
 from rclpy.node import Node
+from tf2_ros import TransformBroadcaster
 
 
 NUM_ITERATIONS = 10
@@ -52,14 +54,33 @@ class Nav2SimpleServer(Node):
             ]
         )
         self._action_server = ActionServer(self, NavigateToPose, 'navigate_to_pose', self.callback)
+        self.tf_broadcaster = TransformBroadcaster(self)
 
     def callback(self, goal_handle):
         start_pos = self.get_parameter('start_x_pos').value
         feedback_msg = NavigateToPose.Feedback()
         feedback_msg.current_pose.pose.position.x = start_pos
 
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'map'
+        t.child_frame_id = 'base_link'
+
+        t.transform.translation.x = goal_handle.request.pose.pose.position.x
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.0
+
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
+
+        # Send the transformation
+        self.tf_broadcaster.sendTransform(t)
         current_pos = start_pos
         while current_pos <= goal_handle.request.pose.pose.position.x:
+            t.header.stamp = self.get_clock().now().to_msg()
+            self.tf_broadcaster.sendTransform(t)
             goal_handle.publish_feedback(feedback_msg)
             current_pos += self.get_parameter('x_pos_increment').value
             feedback_msg.current_pose.pose.position.x = current_pos

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -99,19 +99,20 @@ class RecorderActionServer(Node):
         self.get_logger().info('Executing ROS scene recorder service call ...')
         # Keys: action_type, action_id, path, topics, time_out
         result = MissionAction.Result()
-        if goal_handle.request.values[0] == 'start_recording':
-            path = goal_handle.request.values[1]
+        params = dict(zip(goal_handle.request.keys, goal_handle.request.values))
+        if params['action_type'] == 'start_recording':
+            path = params['path']
             if os.path.exists(path):
                 self.get_logger().warn(f'Output folder {path} already exists.')
                 goal_handle.succeed()
                 result.success = False
                 result.result_description = 'Output folder path already exists.'
                 return result
-            rosbag_command = self.ros_CLI[:] + [goal_handle.request.values[1]]
-            rosbag_command.extend(goal_handle.request.values[2].split())
-            self.time_out = int(goal_handle.request.values[3])
+            rosbag_command = self.ros_CLI[:] + [params['path']]
+            rosbag_command.extend(params['topics'].split())
+            self.time_out = int(params['time'])
             self.start_recording(rosbag_command)
-        elif goal_handle.request.values[0] == 'stop_recording':
+        elif params['action_type'] == 'stop_recording':
             self.stop_recording()
         goal_handle.succeed()
         result.success = True

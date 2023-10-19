@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,10 +23,14 @@ import launch_ros.actions
 import pytest
 import rclpy
 
-from vda5050_msgs.msg import Action, ActionParameter, ActionState, AGVState, Node, Order
+from sensor_msgs.msg import BatteryState as ROSBatteryState
+from vda5050_msgs.msg import (
+    Action, ActionParameter, ActionState, AGVState, BatteryState, InstantActions, Node, Order)
 
 ORDER_TOPIC = 'orders'
+INSTANT_ORDER_TOPIC = 'instant_orders'
 ORDER_INFO_TOPIC = 'agv_state'
+BATTERY_STATE_TOPIC = 'battery_state'
 START_X_POS = 1.0
 
 
@@ -62,7 +66,8 @@ def generate_test_description():
             'dummy_action_server': ['dummy_action'],
             'update_feedback_period': 0.1
         }],
-        remappings=[('client_commands', ORDER_TOPIC)],
+        remappings=[('client_commands', ORDER_TOPIC),
+                    ('instant_actions_commands', INSTANT_ORDER_TOPIC)],
         output='screen'
     )
 
@@ -152,8 +157,6 @@ class Nav2ClientTest(IsaacROSBaseTest):
             The expected last received message.
 
         """
-        first_pos_init = received_messages[ORDER_INFO_TOPIC][0].agv_position.position_initialized
-        self.assertEqual(first_pos_init, False, 'Initial position should be uninitialized')
         last_order_id = received_messages[ORDER_INFO_TOPIC][-1].order_id
         self.assertEqual(last_order_id, expected_last_msg.order_id, 'Order ID does not match')
 
@@ -165,6 +168,71 @@ class Nav2ClientTest(IsaacROSBaseTest):
         last_node_id = received_messages[ORDER_INFO_TOPIC][-1].last_node_id
         self.assertEqual(last_node_id, expected_last_msg.last_node_id,
                          'Last node ID does not match')
+
+    def create_battery_state(self, percentage, voltage, power_supply_status):
+        """
+        Create BatteryState message.
+
+        Parameters
+        ----------
+        percentage : float
+            Charge percentage on 0 to 1 range
+        voltage : float
+            Voltage in Volts
+        power_supply_status : int
+            The charging status as reported. Values defined below.
+
+            POWER_SUPPLY_STATUS_UNKNOWN = 0
+            POWER_SUPPLY_STATUS_CHARGING = 1
+            POWER_SUPPLY_STATUS_DISCHARGING = 2
+            POWER_SUPPLY_STATUS_NOT_CHARGING = 3
+            POWER_SUPPLY_STATUS_FULL = 4
+
+        Returns
+        -------
+        BatteryState
+            The sensor_msgs/BatteryState message
+
+        """
+        battery_state = ROSBatteryState()
+        battery_state.percentage = percentage
+        battery_state.voltage = voltage
+        battery_state.power_supply_status = power_supply_status
+        return battery_state
+
+    def verify_battery_state(self, received_messages, expected_battery_state):
+        """
+        Verify the battery state messages received from the client node.
+
+        Parameters
+        ----------
+        received_messages : List[AGVState]
+            A list of AGVState messages from the client node.
+        expected_battery_state: AGVState
+            The expected battery state message.
+
+        """
+        battery_state = received_messages[ORDER_INFO_TOPIC][-1].battery_state
+        self.assertEqual(battery_state.battery_charge, expected_battery_state.battery_charge)
+        self.assertEqual(battery_state.battery_voltage, expected_battery_state.battery_voltage)
+        self.assertEqual(battery_state.charging, expected_battery_state.charging)
+
+    def is_order_completed(self, received_messages, last_node_id):
+        has_failed_action = False
+        has_unfinished_action = False
+        if len(received_messages[ORDER_INFO_TOPIC]) > 0:
+            for action_state in received_messages[ORDER_INFO_TOPIC][-1].action_states:
+                if action_state.action_status == 'FAILED':
+                    has_failed_action = True
+                elif action_state.action_status != 'FINISHED':
+                    has_unfinished_action = True
+        if has_failed_action:
+            return True
+        if (len(received_messages[ORDER_INFO_TOPIC]) and
+                received_messages[ORDER_INFO_TOPIC][-1].last_node_id ==
+                last_node_id and not has_unfinished_action):
+            return True
+        return False
 
     def test_nav2_client(self):
         """
@@ -178,14 +246,21 @@ class Nav2ClientTest(IsaacROSBaseTest):
         TIMEOUT = 10
         received_messages = {}
 
-        self.generate_namespace_lookup([ORDER_TOPIC, ORDER_INFO_TOPIC])
+        self.generate_namespace_lookup([ORDER_TOPIC, INSTANT_ORDER_TOPIC, ORDER_INFO_TOPIC,
+                                        BATTERY_STATE_TOPIC])
 
         order_pub = self.node.create_publisher(
             Order, self.namespaces[ORDER_TOPIC], self.DEFAULT_QOS)
 
+        instant_order_pub = self.node.create_publisher(
+            InstantActions, self.namespaces[INSTANT_ORDER_TOPIC], self.DEFAULT_QOS)
+
         subs = self.create_logging_subscribers(
             [(ORDER_INFO_TOPIC, AGVState)], received_messages,
             accept_multiple_messages=True)
+
+        battery_state_pub = self.node.create_publisher(
+            ROSBatteryState, self.namespaces[BATTERY_STATE_TOPIC], self.DEFAULT_QOS)
 
         # Allow nodes to initialize
         time.sleep(STARTUP_TIME)
@@ -241,6 +316,32 @@ class Nav2ClientTest(IsaacROSBaseTest):
         )
         expected_last_msgs.append(expected_last_msg)
 
+        # Test cancelOrder instant action.
+        instant_order = InstantActions()
+        instant_order.instant_actions = [Action(action_type='cancelOrder',
+                                                action_id='2')]
+
+        # Expected state
+        expected_last_msg = self.create_agv_state(
+            order_id, str(len(node_positions) - 1), True, end_x)
+        expected_last_msg.action_states = [
+            ActionState(action_id='0', action_status='FAILED'),
+            ActionState(action_id='1', action_status='FAILED'),
+            ActionState(action_id='2', action_type='cancelOrder', action_status='FINISHED')
+        ]
+
+        # Test battery state
+        battery_state_messages = [
+            self.create_battery_state(0.25, 12.0, 1),
+            self.create_battery_state(1.0, 5.0, 3)
+        ]
+
+        # Expected battery messages
+        expected_battery_state = [
+            BatteryState(battery_charge=25.0, battery_voltage=12.0, charging=True),
+            BatteryState(battery_charge=100.0, battery_voltage=5.0, charging=False)
+        ]
+
         try:
             for i, order in enumerate(orders):
                 received_messages[ORDER_INFO_TOPIC].clear()
@@ -253,25 +354,35 @@ class Nav2ClientTest(IsaacROSBaseTest):
                         published = True
                     rclpy.spin_once(self.node, timeout_sec=(0.1))
 
-                    has_failed_action = False
-                    has_unfinished_action = False
-                    if len(received_messages[ORDER_INFO_TOPIC]) > 0:
-                        for action_state in received_messages[ORDER_INFO_TOPIC][-1].action_states:
-                            if action_state.action_status == 'FAILED':
-                                has_failed_action = True
-                            elif action_state.action_status != 'FINISHED':
-                                has_unfinished_action = True
-                    if has_failed_action:
-                        break
-                    if (len(received_messages[ORDER_INFO_TOPIC]) and
-                            received_messages[ORDER_INFO_TOPIC][-1].last_node_id ==
-                            last_node_id and not has_unfinished_action):
+                    if self.is_order_completed(received_messages, last_node_id):
                         break
 
                 self.assertGreater(len(received_messages[ORDER_INFO_TOPIC]), 0,
                                    'Appropriate output not received')
                 self.verify_results(received_messages, expected_last_msgs[i])
 
+            # Test cancelOrder action
+            received_messages[ORDER_INFO_TOPIC].clear()
+            last_node_id = str(len(orders[2].nodes) - 1)
+            order_pub.publish(orders[2])
+            rclpy.spin_once(self.node, timeout_sec=(0.1))
+            instant_order_pub.publish(instant_order)
+            end_time = time.time() + TIMEOUT
+            while time.time() < end_time:
+                rclpy.spin_once(self.node, timeout_sec=(0.1))
+                self.is_order_completed(received_messages, last_node_id)
+            self.verify_results(received_messages, expected_last_msg)
+
+            # Test battery state reporting
+            battery_state_pub.publish(battery_state_messages[0])
+            rclpy.spin_once(self.node, timeout_sec=(0.1))
+            self.verify_battery_state(received_messages, expected_battery_state[0])
+
+            battery_state_pub.publish(battery_state_messages[1])
+            rclpy.spin_once(self.node, timeout_sec=(0.1))
+            self.verify_battery_state(received_messages, expected_battery_state[1])
+
         finally:
             self.node.destroy_subscription(subs)
             self.node.destroy_publisher(order_pub)
+            self.node.destroy_publisher(battery_state_pub)

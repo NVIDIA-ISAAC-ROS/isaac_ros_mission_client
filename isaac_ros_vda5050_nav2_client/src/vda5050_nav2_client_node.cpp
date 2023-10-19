@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-// Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,6 +27,8 @@
 
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "tf2/exceptions.h"
+#include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "vda5050_msgs/msg/error_reference.hpp"
@@ -44,16 +46,25 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
 : Node("nav2_client_node", options),
   client_ptr_(
     rclcpp_action::create_client<NavToPose>(this, "navigate_to_pose")),
-  order_info_pub_(create_publisher<vda5050_msgs::msg::AGVState>(
-      "agv_state", 1)),
+  order_info_pub_(
+    create_publisher<vda5050_msgs::msg::AGVState>("agv_state", 1)),
   order_id_pub_(create_publisher<std_msgs::msg::String>("order_id", 1)),
   order_sub_(create_subscription<vda5050_msgs::msg::Order>(
       "client_commands", rclcpp::SensorDataQoS(),
       std::bind(&Vda5050toNav2ClientNode::Vda5050toNav2ClientCallback, this,
       std::placeholders::_1))),
+  instant_actions_sub_(
+    create_subscription<vda5050_msgs::msg::InstantActions>(
+      "instant_actions_commands", rclcpp::SensorDataQoS(),
+      std::bind(&Vda5050toNav2ClientNode::InstantActionsCallback, this,
+      std::placeholders::_1))),
   info_sub_(create_subscription<std_msgs::msg::String>(
       "info", rclcpp::SensorDataQoS(),
       std::bind(&Vda5050toNav2ClientNode::InfoCallback, this,
+      std::placeholders::_1))),
+  battery_state_sub_(create_subscription<sensor_msgs::msg::BatteryState>(
+      "battery_state", rclcpp::SensorDataQoS(),
+      std::bind(&Vda5050toNav2ClientNode::BatteryStateCallback, this,
       std::placeholders::_1))),
   update_feedback_period_(
     declare_parameter<double>("update_feedback_period", 1.0)),
@@ -68,13 +79,19 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
   order_id_timer_(create_wall_timer(
       std::chrono::duration<double>(update_order_id_period_),
       std::bind(&Vda5050toNav2ClientNode::OrderIdCallback, this))),
-  agv_state_(
-    std::make_shared<vda5050_msgs::msg::AGVState>()),
+  agv_state_(std::make_shared<vda5050_msgs::msg::AGVState>()),
+  cancel_action_(std::make_shared<vda5050_msgs::msg::Action>()),
   reached_waypoint_(false),
   current_node_(0),
-  current_action_(0),
+  current_node_action_(0),
   current_action_state_(0)
 {
+  // tf_buffer and listener to get current robot positon
+  tf_buffer_ =
+    std::make_unique<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_ =
+    std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
   // Create action clients
   for (auto & action_server_name : action_server_names_) {
     RCLCPP_DEBUG(
@@ -118,7 +135,8 @@ vda5050_msgs::msg::ErrorReference CreateErrorReference(
 
 vda5050_msgs::msg::Error CreateError(
   ErrorLevel level, const std::string & error_msg,
-  const std::vector<vda5050_msgs::msg::ErrorReference> & error_refs)
+  const std::vector<vda5050_msgs::msg::ErrorReference> & error_refs,
+  const std::string & error_type = "")
 {
   auto error = vda5050_msgs::msg::Error();
   switch (level) {
@@ -134,6 +152,7 @@ vda5050_msgs::msg::Error CreateError(
   }
   error.error_description = error_msg;
   error.error_references = error_refs;
+  error.error_type = error_type;
   return error;
 }
 
@@ -146,26 +165,26 @@ void Vda5050toNav2ClientNode::execute_order()
   // Reached target waypoint of the current node
   if (reached_waypoint_) {
     // Check if current node has actions
-    if (current_action_ < current_order_->nodes[current_node_].actions.size()) {
+    if (current_node_action_ < current_order_->nodes[current_node_].actions.size()) {
       // Check if action has been finished
       auto & action_status =
         agv_state_->action_states[current_action_state_].action_status;
-      if (action_status == "FINISHED") {
+      if (action_status == VDAActionState().FINISHED) {
         RCLCPP_INFO(
           get_logger(), "Finished action: %s",
           agv_state_->action_states[current_action_state_].action_id.c_str());
-        current_action_++;
+        current_node_action_++;
         current_action_state_++;
-      } else if (action_status == "WAITING") {
+      } else if (action_status == VDAActionState().WAITING) {
         // Trigger action if it's still waiting
         Vda5050ActionsHandler(
-          current_order_->nodes[current_node_].actions[current_action_]);
-        action_status = "INITIALIZING";
+          current_order_->nodes[current_node_].actions[current_node_action_]);
+        action_status = VDAActionState().INITIALIZING;
         agv_state_->driving = false;
       }
     } else {
       // Move to next node if no action
-      current_action_ = 0;
+      current_node_action_ = 0;
       current_node_++;
       reached_waypoint_ = false;
       lock.unlock();
@@ -182,6 +201,30 @@ void Vda5050toNav2ClientNode::PublishRobotState()
 
 void Vda5050toNav2ClientNode::StateTimerCallback()
 {
+  // Get robot position
+  try {
+    // Find the latest map_T_base_link transform
+    geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform(
+      "map", "base_link",
+      tf2::TimePointZero);
+    agv_state_->agv_position.x = t.transform.translation.x;
+    agv_state_->agv_position.y = t.transform.translation.y;
+    // Calculate robot orientation
+    tf2::Quaternion quaternion;
+    tf2::fromMsg(t.transform.rotation, quaternion);
+    tf2::Matrix3x3 matrix(quaternion);
+    double roll, pitch, yaw;
+    matrix.getEulerYPR(yaw, pitch, roll);
+    agv_state_->agv_position.theta = yaw;
+    agv_state_->agv_position.position_initialized = true;
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_ERROR(
+      this->get_logger(), "Could not get robot position: %s", ex.what());
+  }
+  if (cancel_action_) {
+    CancelOrder();
+    return;
+  }
   execute_order();
   PublishRobotState();
 }
@@ -218,7 +261,7 @@ void Vda5050toNav2ClientNode::NavigateToPose()
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   if (!client_ptr_->wait_for_action_server()) {
-    RCLCPP_ERROR(get_logger(), "Action server not available after waiting");
+    RCLCPP_ERROR(get_logger(), "Navigation server not available");
     return;
   }
 
@@ -234,8 +277,7 @@ void Vda5050toNav2ClientNode::NavigateToPose()
   pose_stamped.pose.position.y =
     current_order_->nodes[current_node_].node_position.y;
   pose_stamped.pose.position.z = 0.0;
-  pose_stamped.header.frame_id =
-    current_order_->nodes[current_node_].node_position.map_id;
+  pose_stamped.header.frame_id = "map";
 
   // Convert theta into a quaternion for goal pose's orientation
   tf2::Quaternion orientation;
@@ -278,7 +320,7 @@ void Vda5050toNav2ClientNode::Vda5050ActionsHandler(
       this->get_logger(), "Action type %s is not supported",
       vda5050_action.action_type.c_str());
     UpdateActionState(
-      current_action_state_, "FAILED",
+      current_action_state_, VDAActionState().FAILED,
       "This action is not supported");
   }
   // Trigger action
@@ -325,9 +367,10 @@ void Vda5050toNav2ClientNode::InitAGVState()
     node_state.released = vda5050_node.released;
     agv_state_->node_states.push_back(node_state);
     for (const auto & vda5050_action : vda5050_node.actions) {
-      auto actionState = vda5050_msgs::msg::ActionState();
+      auto actionState = VDAActionState();
       actionState.action_id = vda5050_action.action_id;
-      actionState.action_status = "WAITING";
+      actionState.action_status =
+        VDAActionState().WAITING;
       agv_state_->action_states.push_back(actionState);
     }
   }
@@ -351,9 +394,132 @@ void Vda5050toNav2ClientNode::Vda5050toNav2ClientCallback(
   if (!RunningOrder() && !msg->nodes.empty()) {
     current_order_ = msg;
     current_node_ = 0;
-    current_action_ = 0, current_action_state_ = 0;
+    current_node_action_ = 0, current_action_state_ = 0;
     InitAGVState();
   }
+}
+
+void Vda5050toNav2ClientNode::BatteryStateCallback(
+  const sensor_msgs::msg::BatteryState::ConstSharedPtr msg)
+{
+  agv_state_->battery_state.battery_charge = msg->percentage * 100;
+  agv_state_->battery_state.battery_voltage = msg->voltage;
+  // POWER_SUPPLY_STATUS_CHARGING = 1
+  agv_state_->battery_state.charging = (msg->power_supply_status == 1) ? true : false;
+
+  // battery_health and reach are currently not supported
+  agv_state_->battery_state.battery_health = 0;
+  agv_state_->battery_state.reach = 0;
+}
+
+void Vda5050toNav2ClientNode::InstantActionsCallback(
+  const vda5050_msgs::msg::InstantActions::ConstSharedPtr msg)
+{
+  RCLCPP_INFO(
+    get_logger(), "Instant actions with header_id %d received",
+    msg->header_id);
+  std::lock_guard<std::mutex> lock(order_mutex_);
+
+  for (const vda5050_msgs::msg::Action & action : msg->instant_actions) {
+    RCLCPP_INFO(
+      this->get_logger(), "Processing action %s of type %s.",
+      action.action_id.c_str(), action.action_type.c_str());
+    // Add action to action_states
+    auto action_state = VDAActionState();
+    action_state.action_id = action.action_id;
+    action_state.action_description = action.action_description;
+    action_state.action_status = VDAActionState().WAITING;
+    action_state.action_type = action.action_type;
+    agv_state_->action_states.push_back(action_state);
+    if (action.action_type == "cancelOrder") {
+      cancel_action_ = std::make_shared<vda5050_msgs::msg::Action>(action);
+    }
+  }
+}
+
+void Vda5050toNav2ClientNode::CancelOrder()
+{
+  /*
+  Process cancel order as per VDA5050 specification:
+  https://github.com/VDA5050/VDA5050/blob/main/assets/Figure9.png
+  */
+  std::lock_guard<std::mutex> lock(order_mutex_);
+  if (!RunningOrder()) {
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "cancelOrder action request failed. There is no active order running.");
+    UpdateActionStatebyId(cancel_action_->action_id, VDAActionState().FAILED);
+    // The AGV must report a “noOrderToCancel” error with the errorLevel set to
+    // warning. The actionId of the instantAction must be passed as an errorReference.
+    auto error = vda5050_msgs::msg::Error();
+    error = CreateError(
+      ErrorLevel::WARNING, "There is no active order running.",
+      {CreateErrorReference("action_id", cancel_action_->action_id)});
+    agv_state_->errors.push_back(error);
+    PublishRobotState();
+    cancel_action_.reset();
+    return;
+  }
+  // Set cancelOrder action state to running
+  UpdateActionStatebyId(cancel_action_->action_id, VDAActionState().RUNNING);
+  // Set waiting actions to failed
+  for (auto & action_state : agv_state_->action_states) {
+    if (action_state.action_status ==
+      VDAActionState().WAITING)
+    {
+      UpdateActionStatebyId(action_state.action_id, VDAActionState().FAILED);
+    }
+  }
+  // Interrupt any running action
+  for (auto it = action_clients_.begin(); it != action_clients_.end(); ++it) {
+    it->second->async_cancel_all_goals();
+  }
+  // vda_action_goal_handles_.clear();
+  // Interrupt any running navigation goal
+  if (nav_goal_handle_) {
+    client_ptr_->async_cancel_goal(nav_goal_handle_);
+  }
+  // Once all the VDA actions and navigation goal requests have finished,
+  // the cancel order will be mark as finished
+  UpdateActionStatebyId(cancel_action_->action_id, VDAActionState().FINISHED);
+  cancel_action_.reset();
+  RCLCPP_INFO(
+    this->get_logger(), "Finished executing cancelOrder.");
+}
+
+void Vda5050toNav2ClientNode::UpdateActionStatebyId(
+  const std::string & action_id,
+  const std::string & action_status)
+{
+  /*
+  Update action status on the current state given action's ID.
+  */
+
+  // Get action state from current state
+  auto it = std::find_if(
+    agv_state_->action_states.begin(),
+    agv_state_->action_states.end(),
+    [&action_id](const VDAActionState & action) {
+      return action.action_id == action_id;
+    });
+
+  if (it == agv_state_->action_states.end()) {
+    RCLCPP_ERROR(
+      this->get_logger(), "Error while processing action state. Couldn't find action with id: %s",
+      action_id.c_str());
+    auto error = vda5050_msgs::msg::Error();
+    error = CreateError(
+      ErrorLevel::WARNING, "VDA5050 action with id " + action_id + " not found.",
+      {CreateErrorReference("action_id", action_id)}, "noOrderToCancel");
+    agv_state_->errors.push_back(error);
+  } else {
+    // If found, update action status
+    RCLCPP_INFO(
+      this->get_logger(), "Update action %s with state %s ",
+      action_id.c_str(), action_status.c_str());
+    it->action_status = action_status;
+  }
+  PublishRobotState();
 }
 
 void Vda5050toNav2ClientNode::UpdateActionState(
@@ -366,7 +532,7 @@ void Vda5050toNav2ClientNode::UpdateActionState(
   agv_state_->action_states[action_state_idx].action_status = status;
   agv_state_->action_states[action_state_idx].result_description =
     action_description;
-  if (status == "FAILED") {
+  if (status == VDAActionState().FAILED) {
     auto error = vda5050_msgs::msg::Error();
     error = CreateError(
       ErrorLevel::WARNING, "Action Error",
@@ -392,12 +558,13 @@ void Vda5050toNav2ClientNode::MissionActionResponseCallback(
     RCLCPP_ERROR(
       this->get_logger(), "MissionAction %s was rejected",
       action_id.c_str());
-    UpdateActionState(action_state_idx, "FAILED", "Action was rejected");
+    UpdateActionState(action_state_idx, VDAActionState().FAILED, "Action was rejected");
   } else {
+    // vda_action_goal_handles_.push_back(goal);
     RCLCPP_INFO(
       this->get_logger(), "MissionAction %s was accepted",
       action_id.c_str());
-    UpdateActionState(action_state_idx, "RUNNING", "Action was rejected");
+    UpdateActionState(action_state_idx, VDAActionState().RUNNING, "Action was rejected");
   }
 }
 
@@ -415,14 +582,14 @@ void Vda5050toNav2ClientNode::MissionActionResultCallback(
           get_logger(), "MissionAction %s was succeeded",
           action_id.c_str());
         UpdateActionState(
-          action_state_idx, "FINISHED",
+          action_state_idx, VDAActionState().FINISHED,
           result.result->result_description);
       } else {
         RCLCPP_ERROR(
           get_logger(), "MissionAction %s was failed",
           action_id.c_str());
         UpdateActionState(
-          action_state_idx, "FAILED",
+          action_state_idx, VDAActionState().FAILED,
           result.result->result_description);
       }
       return;
@@ -430,18 +597,18 @@ void Vda5050toNav2ClientNode::MissionActionResultCallback(
       RCLCPP_ERROR(
         get_logger(), "MissionAction %s was aborted",
         action_id.c_str());
-      UpdateActionState(action_state_idx, "FAILED", "Action is aborted");
+      UpdateActionState(action_state_idx, VDAActionState().FAILED, "Action is aborted");
       return;
     case rclcpp_action::ResultCode::CANCELED:
       RCLCPP_ERROR(
         get_logger(), "MissionAction %s was canceled",
         action_id.c_str());
-      UpdateActionState(action_state_idx, "FAILED", "Action is canceled");
+      UpdateActionState(action_state_idx, VDAActionState().FAILED, "Action is canceled");
       return;
     default:
       RCLCPP_ERROR(this->get_logger(), "Unknown result code");
       UpdateActionState(
-        action_state_idx, "FAILED",
+        action_state_idx, VDAActionState().FAILED,
         "Unknown action result code");
       return;
   }
@@ -468,13 +635,15 @@ void Vda5050toNav2ClientNode::NavPoseGoalResponseCallback(
     RCLCPP_WARN(get_logger(), "Goal was rejected by server");
     auto error = vda5050_msgs::msg::Error();
     error = CreateError(
-      ErrorLevel::WARNING, "Goal rejected",
+      ErrorLevel::FATAL, "Goal rejected",
       {CreateErrorReference(
           "node_id",
           current_order_->nodes[current_node_].node_id)});
     agv_state_->errors.push_back(error);
+    nav_goal_handle_.reset();
     PublishRobotState();
   } else {
+    nav_goal_handle_ = goal;
     agv_state_->driving = true;
     if (verbose_) {
       RCLCPP_INFO(get_logger(), "Goal accepted by server, waiting for result");
@@ -484,20 +653,9 @@ void Vda5050toNav2ClientNode::NavPoseGoalResponseCallback(
 
 void Vda5050toNav2ClientNode::NavPoseFeedbackCallback(
   GoalHandleNavToPose::SharedPtr,
-  const NavToPose::Feedback::ConstSharedPtr feedback)
+  const NavToPose::Feedback::ConstSharedPtr)
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
-  agv_state_->agv_position.x = feedback->current_pose.pose.position.x;
-  agv_state_->agv_position.y = feedback->current_pose.pose.position.y;
-  agv_state_->agv_position.position_initialized = true;
-
-  // Convert from quaternion orientation to Euler's angle for theta
-  tf2::Quaternion quat;
-  tf2::fromMsg(feedback->current_pose.pose.orientation, quat);
-  tf2::Matrix3x3 m(quat);
-  double roll, pitch, yaw;
-  m.getRPY(roll, pitch, yaw);
-  agv_state_->agv_position.theta = yaw;
   agv_state_->driving = true;
 }
 
@@ -506,6 +664,7 @@ void Vda5050toNav2ClientNode::NavPoseResultCallback(
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   auto error = vda5050_msgs::msg::Error();
+  nav_goal_handle_.reset();
   switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
       break;
@@ -515,7 +674,7 @@ void Vda5050toNav2ClientNode::NavPoseResultCallback(
         agv_state_->last_node_id.c_str());
       current_node_ = 1;
       error = CreateError(
-        ErrorLevel::WARNING, "Goal aborted",
+        ErrorLevel::FATAL, "Goal aborted",
         {CreateErrorReference(
             "node_id",
             current_order_->nodes[current_node_].node_id)});

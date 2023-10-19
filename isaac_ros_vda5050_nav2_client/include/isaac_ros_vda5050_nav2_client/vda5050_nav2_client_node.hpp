@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-// Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,7 @@
 #ifndef ISAAC_ROS_VDA5050_NAV2_CLIENT__VDA5050_NAV2_CLIENT_NODE_HPP_
 #define ISAAC_ROS_VDA5050_NAV2_CLIENT__VDA5050_NAV2_CLIENT_NODE_HPP_
 
+#include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -36,7 +37,10 @@
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
+#include "sensor_msgs/msg/battery_state.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer.h"
 #include "vda5050_msgs/msg/error.hpp"
 #include "vda5050_msgs/msg/order.hpp"
 #include "vda5050_msgs/msg/action.hpp"
@@ -46,6 +50,7 @@
 #include "vda5050_msgs/msg/node_state.hpp"
 #include "vda5050_msgs/msg/node.hpp"
 #include "vda5050_msgs/msg/edge_state.hpp"
+#include "vda5050_msgs/msg/instant_actions.hpp"
 
 #include "isaac_ros_vda5050_nav2_client/action/mission_action.hpp"
 
@@ -60,8 +65,11 @@ public:
   using NavToPose = nav2_msgs::action::NavigateToPose;
   using GoalHandleNavToPose = rclcpp_action::ClientGoalHandle<NavToPose>;
 
+  using VDAActionState = vda5050_msgs::msg::ActionState;
+
   // Add generic action handle
-  using MissionAction = isaac_ros_vda5050_nav2_client::action::MissionAction;
+  using MissionAction =
+    isaac_ros_vda5050_nav2_client::action::MissionAction;
   using GoalHandleMissionAction = rclcpp_action::ClientGoalHandle<MissionAction>;
 
   explicit Vda5050toNav2ClientNode(const rclcpp::NodeOptions & options);
@@ -70,11 +78,15 @@ public:
 
 private:
   rclcpp_action::Client<NavToPose>::SharedPtr client_ptr_;
+  GoalHandleNavToPose::SharedPtr nav_goal_handle_;
 
   rclcpp::Publisher<vda5050_msgs::msg::AGVState>::SharedPtr order_info_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr order_id_pub_;
   rclcpp::Subscription<vda5050_msgs::msg::Order>::SharedPtr order_sub_;
+  rclcpp::Subscription<vda5050_msgs::msg::InstantActions>::SharedPtr
+    instant_actions_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr info_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::BatteryState>::SharedPtr battery_state_sub_;
   // Publish a vda5050_msgs/AGVState based on the current state of the robot
   void PublishRobotState();
   // Timer callback function to publish a vda5050_msgs/AGVState message
@@ -102,13 +114,16 @@ private:
   // The callback function when the node receives a std_msgs/String info message and appends it to
   // the status message that gets published
   void InfoCallback(const std_msgs::msg::String::ConstSharedPtr msg);
+  // The callback function when the node receives a sensor_msgs/BatteryState message and processes
+  // it into a VDA5050 BatteryState message
+  void BatteryStateCallback(const sensor_msgs::msg::BatteryState::ConstSharedPtr msg);
   // Goal response callback for NavigateToPose goal message
   void NavPoseGoalResponseCallback(
     const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr & goal);
   // Feedback callback for NavigateToPose goal message
   void NavPoseFeedbackCallback(
     GoalHandleNavToPose::SharedPtr,
-    const NavToPose::Feedback::ConstSharedPtr feedback);
+    const NavToPose::Feedback::ConstSharedPtr);
   // Result callback for NavigateToPose goal message
   void NavPoseResultCallback(const GoalHandleNavToPose::WrappedResult & result);
   // Execute order message
@@ -121,6 +136,9 @@ private:
   void MissionActionResultCallback(
     const GoalHandleMissionAction::WrappedResult & result,
     const size_t & action_state_idx);
+  void CancelOrder();
+  void UpdateActionStatebyId(const std::string & action_id, const std::string & action_status);
+  void InstantActionsCallback(const vda5050_msgs::msg::InstantActions::ConstSharedPtr msg);
 
   // The length of a period before the client publishes the robot state and mission status messages
   // (in seconds)
@@ -145,17 +163,22 @@ private:
   vda5050_msgs::msg::Order::ConstSharedPtr current_order_;
   // Order information for feedback of the mission
   vda5050_msgs::msg::AGVState::SharedPtr agv_state_;
+  // Cancel action
+  vda5050_msgs::msg::Action::SharedPtr cancel_action_;
   // Reached current waypoint flag
   bool reached_waypoint_;
   // Current node the robot is working on
   size_t current_node_{};
   // Current action the robot is working on
-  size_t current_action_{};
+  size_t current_node_action_{};
   // Current action state to update
   size_t current_action_state_{};
   // Supported action server and type
   std::unordered_map<std::string, std::string> action_server_map_;
   std::unordered_map<std::string, rclcpp_action::Client<MissionAction>::SharedPtr> action_clients_;
+
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 };
 
 }  // namespace mission_client
