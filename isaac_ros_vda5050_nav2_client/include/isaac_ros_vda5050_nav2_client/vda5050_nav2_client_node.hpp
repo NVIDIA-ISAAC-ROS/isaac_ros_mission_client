@@ -36,8 +36,8 @@
 #include "rclcpp_components/register_node_macro.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "sensor_msgs/msg/battery_state.hpp"
+#include "nav2_msgs/action/navigate_through_poses.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
@@ -62,8 +62,8 @@ namespace mission_client
 class Vda5050toNav2ClientNode : public rclcpp::Node
 {
 public:
-  using NavToPose = nav2_msgs::action::NavigateToPose;
-  using GoalHandleNavToPose = rclcpp_action::ClientGoalHandle<NavToPose>;
+  using NavThroughPoses = nav2_msgs::action::NavigateThroughPoses;
+  using GoalHandleNavThroughPoses = rclcpp_action::ClientGoalHandle<NavThroughPoses>;
 
   using VDAActionState = vda5050_msgs::msg::ActionState;
 
@@ -77,8 +77,8 @@ public:
   ~Vda5050toNav2ClientNode();
 
 private:
-  rclcpp_action::Client<NavToPose>::SharedPtr client_ptr_;
-  GoalHandleNavToPose::SharedPtr nav_goal_handle_;
+  rclcpp_action::Client<NavThroughPoses>::SharedPtr client_ptr_;
+  GoalHandleNavThroughPoses::SharedPtr nav_goal_handle_;
 
   rclcpp::Publisher<vda5050_msgs::msg::AGVState>::SharedPtr order_info_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr order_id_pub_;
@@ -97,9 +97,9 @@ private:
   // NOT thread-safe, and need to be called in a function that has acquired the `order_mutex_`
   // lock.
   bool RunningOrder();
-  // Function that creates the NavigateToPose goal message for Nav2 and sends that goal
+  // Function that creates the NavigateThroughPoses goal message for Nav2 and sends that goal
   // asynchronously
-  void NavigateToPose();
+  void NavigateThroughPoses();
   // Vda5050 action handler: check actions in the current node and send requests to trigger
   // different servers based on the action type
   void Vda5050ActionsHandler(const vda5050_msgs::msg::Action & vda5050_action);
@@ -117,15 +117,15 @@ private:
   // The callback function when the node receives a sensor_msgs/BatteryState message and processes
   // it into a VDA5050 BatteryState message
   void BatteryStateCallback(const sensor_msgs::msg::BatteryState::ConstSharedPtr msg);
-  // Goal response callback for NavigateToPose goal message
+  // Goal response callback for NavigateThroughPoses goal message
   void NavPoseGoalResponseCallback(
-    const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr & goal);
-  // Feedback callback for NavigateToPose goal message
+    const rclcpp_action::ClientGoalHandle<NavThroughPoses>::SharedPtr & goal);
+  // Feedback callback for NavigateThroughPoses goal message
   void NavPoseFeedbackCallback(
-    GoalHandleNavToPose::SharedPtr,
-    const NavToPose::Feedback::ConstSharedPtr);
-  // Result callback for NavigateToPose goal message
-  void NavPoseResultCallback(const GoalHandleNavToPose::WrappedResult & result);
+    GoalHandleNavThroughPoses::SharedPtr,
+    const NavThroughPoses::Feedback::ConstSharedPtr);
+  // Result callback for NavigateThroughPoses goal message
+  void NavPoseResultCallback(const GoalHandleNavThroughPoses::WrappedResult & result);
   // Execute order message
   void execute_order();
   // Goal response callback for MissionAction goal message
@@ -169,6 +169,8 @@ private:
   bool reached_waypoint_;
   // Current node the robot is working on
   size_t current_node_{};
+  // Then last node of navigate_through_poses action
+  size_t next_stop_{};
   // Current action the robot is working on
   size_t current_node_action_{};
   // Current action state to update
