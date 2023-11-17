@@ -20,9 +20,9 @@
 import time
 
 from geometry_msgs.msg import TransformStamped
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateThroughPoses
 import rclpy
-from rclpy.action import ActionServer
+from rclpy.action import ActionServer, GoalResponse
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 
@@ -53,12 +53,16 @@ class Nav2SimpleServer(Node):
                 ('x_pos_increment', 0.5)
             ]
         )
-        self._action_server = ActionServer(self, NavigateToPose, 'navigate_to_pose', self.callback)
+        self._action_server = ActionServer(self, NavigateThroughPoses,
+                                           'navigate_through_poses',
+                                           self.callback)
         self.tf_broadcaster = TransformBroadcaster(self)
 
     def callback(self, goal_handle):
+        if len(goal_handle.request.poses) == 0:
+            return GoalResponse.REJECT
         start_pos = self.get_parameter('start_x_pos').value
-        feedback_msg = NavigateToPose.Feedback()
+        feedback_msg = NavigateThroughPoses.Feedback()
         feedback_msg.current_pose.pose.position.x = start_pos
 
         t = TransformStamped()
@@ -66,7 +70,7 @@ class Nav2SimpleServer(Node):
         t.header.frame_id = 'map'
         t.child_frame_id = 'base_link'
 
-        t.transform.translation.x = goal_handle.request.pose.pose.position.x
+        t.transform.translation.x = goal_handle.request.poses[-1].pose.position.x
         t.transform.translation.y = 0.0
         t.transform.translation.z = 0.0
 
@@ -78,7 +82,7 @@ class Nav2SimpleServer(Node):
         # Send the transformation
         self.tf_broadcaster.sendTransform(t)
         current_pos = start_pos
-        while current_pos <= goal_handle.request.pose.pose.position.x:
+        while current_pos <= goal_handle.request.poses[-1].pose.position.x:
             t.header.stamp = self.get_clock().now().to_msg()
             self.tf_broadcaster.sendTransform(t)
             goal_handle.publish_feedback(feedback_msg)
@@ -88,7 +92,7 @@ class Nav2SimpleServer(Node):
 
         goal_handle.succeed()
 
-        result = NavigateToPose.Result()
+        result = NavigateThroughPoses.Result()
         return result
 
 

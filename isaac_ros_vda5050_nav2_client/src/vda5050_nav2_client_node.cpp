@@ -45,7 +45,7 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
   const rclcpp::NodeOptions & options)
 : Node("nav2_client_node", options),
   client_ptr_(
-    rclcpp_action::create_client<NavToPose>(this, "navigate_to_pose")),
+    rclcpp_action::create_client<NavThroughPoses>(this, "navigate_through_poses")),
   order_info_pub_(
     create_publisher<vda5050_msgs::msg::AGVState>("agv_state", 1)),
   order_id_pub_(create_publisher<std_msgs::msg::String>("order_id", 1)),
@@ -83,6 +83,7 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
   cancel_action_(std::make_shared<vda5050_msgs::msg::Action>()),
   reached_waypoint_(false),
   current_node_(0),
+  next_stop_(0),
   current_node_action_(0),
   current_action_state_(0)
 {
@@ -185,10 +186,10 @@ void Vda5050toNav2ClientNode::execute_order()
     } else {
       // Move to next node if no action
       current_node_action_ = 0;
-      current_node_++;
       reached_waypoint_ = false;
+      next_stop_++;
       lock.unlock();
-      NavigateToPose();
+      NavigateThroughPoses();
     }
   }
 }
@@ -246,7 +247,7 @@ bool Vda5050toNav2ClientNode::RunningOrder()
     return false;
   }
   // If client has completed the currently assigned order
-  if (current_node_ >= current_order_->nodes.size()) {
+  if (next_stop_ >= current_order_->nodes.size()) {
     return false;
   }
   // If the order has failed
@@ -257,7 +258,7 @@ bool Vda5050toNav2ClientNode::RunningOrder()
   return true;
 }
 
-void Vda5050toNav2ClientNode::NavigateToPose()
+void Vda5050toNav2ClientNode::NavigateThroughPoses()
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   if (!client_ptr_->wait_for_action_server()) {
@@ -265,30 +266,38 @@ void Vda5050toNav2ClientNode::NavigateToPose()
     return;
   }
 
-  if (current_node_ >= current_order_->nodes.size()) {
+  if (next_stop_ >= current_order_->nodes.size()) {
     RCLCPP_INFO(get_logger(), "Navigation completed");
     return;
   }
-  auto goal_msg = NavToPose::Goal();
-  auto pose_stamped = geometry_msgs::msg::PoseStamped();
+  auto goal_msg = NavThroughPoses::Goal();
+  for (size_t i = current_node_ + 1; i < current_order_->nodes.size(); i++) {
+    auto pose_stamped = geometry_msgs::msg::PoseStamped();
 
-  pose_stamped.pose.position.x =
-    current_order_->nodes[current_node_].node_position.x;
-  pose_stamped.pose.position.y =
-    current_order_->nodes[current_node_].node_position.y;
-  pose_stamped.pose.position.z = 0.0;
-  pose_stamped.header.frame_id = "map";
+    pose_stamped.pose.position.x =
+      current_order_->nodes[i].node_position.x;
+    pose_stamped.pose.position.y =
+      current_order_->nodes[i].node_position.y;
+    pose_stamped.pose.position.z = 0.0;
+    pose_stamped.header.frame_id = "map";
+    // Convert theta into a quaternion for goal pose's orientation
+    tf2::Quaternion orientation;
+    orientation.setRPY(
+      0, 0,
+      current_order_->nodes[i].node_position.theta);
+    pose_stamped.pose.orientation = tf2::toMsg(orientation);
+    pose_stamped.header.stamp = rclcpp::Clock().now();
+    goal_msg.poses.push_back(pose_stamped);
+    if (current_order_->nodes[i].actions.size() > 0 ||
+      i == current_order_->nodes.size() - 1 ||
+      current_order_->nodes[i].node_position.allowed_deviation_x_y == 0)
+    {
+      next_stop_ = i;
+      break;
+    }
+  }
 
-  // Convert theta into a quaternion for goal pose's orientation
-  tf2::Quaternion orientation;
-  orientation.setRPY(
-    0, 0,
-    current_order_->nodes[current_node_].node_position.theta);
-  pose_stamped.pose.orientation = tf2::toMsg(orientation);
-  pose_stamped.header.stamp = rclcpp::Clock().now();
-  goal_msg.pose = pose_stamped;
-
-  auto send_goal_options = rclcpp_action::Client<NavToPose>::SendGoalOptions();
+  auto send_goal_options = rclcpp_action::Client<NavThroughPoses>::SendGoalOptions();
   send_goal_options.goal_response_callback =
     std::bind(
     &Vda5050toNav2ClientNode::NavPoseGoalResponseCallback, this,
@@ -304,9 +313,9 @@ void Vda5050toNav2ClientNode::NavigateToPose()
   if (verbose_) {
     RCLCPP_INFO(
       get_logger(), "Sending goal for (x: %f, y: %f, t: %f)",
-      current_order_->nodes[current_node_].node_position.x,
-      current_order_->nodes[current_node_].node_position.y,
-      current_order_->nodes[current_node_].node_position.theta);
+      current_order_->nodes[next_stop_].node_position.x,
+      current_order_->nodes[next_stop_].node_position.y,
+      current_order_->nodes[next_stop_].node_position.theta);
   }
   client_ptr_->async_send_goal(goal_msg, send_goal_options);
 }
@@ -394,6 +403,7 @@ void Vda5050toNav2ClientNode::Vda5050toNav2ClientCallback(
   if (!RunningOrder() && !msg->nodes.empty()) {
     current_order_ = msg;
     current_node_ = 0;
+    next_stop_ = 0;
     current_node_action_ = 0, current_action_state_ = 0;
     InitAGVState();
   }
@@ -628,7 +638,7 @@ void Vda5050toNav2ClientNode::InfoCallback(
 
 void Vda5050toNav2ClientNode::NavPoseGoalResponseCallback(
   const rclcpp_action::ClientGoalHandle<
-    nav2_msgs::action::NavigateToPose>::SharedPtr & goal)
+    nav2_msgs::action::NavigateThroughPoses>::SharedPtr & goal)
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   if (!goal) {
@@ -652,15 +662,15 @@ void Vda5050toNav2ClientNode::NavPoseGoalResponseCallback(
 }
 
 void Vda5050toNav2ClientNode::NavPoseFeedbackCallback(
-  GoalHandleNavToPose::SharedPtr,
-  const NavToPose::Feedback::ConstSharedPtr)
+  GoalHandleNavThroughPoses::SharedPtr,
+  const NavThroughPoses::Feedback::ConstSharedPtr)
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   agv_state_->driving = true;
 }
 
 void Vda5050toNav2ClientNode::NavPoseResultCallback(
-  const GoalHandleNavToPose::WrappedResult & result)
+  const GoalHandleNavThroughPoses::WrappedResult & result)
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   auto error = vda5050_msgs::msg::Error();
@@ -699,11 +709,14 @@ void Vda5050toNav2ClientNode::NavPoseResultCallback(
       return;
   }
   // Logic if navigation was successful
-  RCLCPP_INFO(get_logger(), "Reached order node: %ld", current_node_);
-  if (!agv_state_->node_states.empty()) {
-    agv_state_->node_states.erase(
-      agv_state_->node_states.begin());
+  RCLCPP_INFO(get_logger(), "Reached order node: %ld", next_stop_);
+  for (size_t i = current_node_; i < next_stop_; i++) {
+    if (!agv_state_->node_states.empty()) {
+      agv_state_->node_states.erase(
+        agv_state_->node_states.begin());
+    }
   }
+  current_node_ = next_stop_;
   agv_state_->last_node_id =
     current_order_->nodes[current_node_].node_id;
   agv_state_->last_node_sequence_id =
