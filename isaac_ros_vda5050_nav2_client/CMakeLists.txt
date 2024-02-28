@@ -45,6 +45,7 @@ message( STATUS "Architecture: ${ARCHITECTURE}" )
 set(CUDA_MIN_VERSION "11.4")
 
 # find dependencies
+find_package(nav_msgs)
 find_package(nav2_msgs)
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
