@@ -29,6 +29,7 @@
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
   <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>nav2_msgs</depend>
   <depend>vda5050_msgs</depend>
   <depend>rclcpp</depend>

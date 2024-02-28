@@ -37,6 +37,7 @@
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/battery_state.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "nav2_msgs/action/navigate_through_poses.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "tf2_ros/transform_listener.h"
@@ -87,6 +88,8 @@ private:
     instant_actions_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr info_sub_;
   rclcpp::Subscription<sensor_msgs::msg::BatteryState>::SharedPtr battery_state_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
+
   // Publish a vda5050_msgs/AGVState based on the current state of the robot
   void PublishRobotState();
   // Timer callback function to publish a vda5050_msgs/AGVState message
@@ -117,6 +120,9 @@ private:
   // The callback function when the node receives a sensor_msgs/BatteryState message and processes
   // it into a VDA5050 BatteryState message
   void BatteryStateCallback(const sensor_msgs::msg::BatteryState::ConstSharedPtr msg);
+  // The callback function when the node receives a nav_msgs/Odometry message and appends it's velotity to
+  // the status message's velocity that gets published
+  void OdometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr msg); 
   // Goal response callback for NavigateThroughPoses goal message
   void NavPoseGoalResponseCallback(
     const rclcpp_action::ClientGoalHandle<NavThroughPoses>::SharedPtr & goal);

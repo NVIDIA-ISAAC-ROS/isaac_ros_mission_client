@@ -66,6 +66,10 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
       "battery_state", rclcpp::SensorDataQoS(),
       std::bind(&Vda5050toNav2ClientNode::BatteryStateCallback, this,
       std::placeholders::_1))),
+  odometry_sub_(create_subscription<nav_msgs::msg::Odometry>(
+      "odom", rclcpp::SensorDataQoS(),
+      std::bind(&Vda5050toNav2ClientNode::OdometryCallback, this,
+      std::placeholders::_1))),
   update_feedback_period_(
     declare_parameter<double>("update_feedback_period", 1.0)),
   update_order_id_period_(
@@ -420,6 +424,14 @@ void Vda5050toNav2ClientNode::BatteryStateCallback(
   // battery_health and reach are currently not supported
   agv_state_->battery_state.battery_health = 0;
   agv_state_->battery_state.reach = 0;
+}
+
+void Vda5050toNav2ClientNode::OdometryCallback(
+  const nav_msgs::msg::Odometry::ConstSharedPtr msg)
+{
+  agv_state_->velocity.vx = msg->twist.twist.linear.x;
+  agv_state_->velocity.vy = msg->twist.twist.linear.y;
+  agv_state_->velocity.omega = msg->twist.twist.angular.z;
 }
 
 void Vda5050toNav2ClientNode::InstantActionsCallback(
