@@ -122,8 +122,7 @@ private:
   void BatteryStateCallback(const sensor_msgs::msg::BatteryState::ConstSharedPtr msg);
   // The callback function when the node receives a nav_msgs/Odometry message and appends it's velotity to
   // the status message's velocity that gets published
-  void OdometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
-    
+  void OdometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr msg); 
   // Goal response callback for NavigateThroughPoses goal message
   void NavPoseGoalResponseCallback(
     const rclcpp_action::ClientGoalHandle<NavThroughPoses>::SharedPtr & goal);
