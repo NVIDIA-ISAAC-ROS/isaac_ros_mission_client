@@ -57,3 +57,8 @@ A Quickstart with Isaac Sim is [here](https://nvidia-isaac-ros.github.io/concept
 ## Latest
 
 Update 2023-10-18: Bugfixes, Mission Cancellation, initial pose
+
+## Contributors
+
+- Add velocities to the status message [(#10)](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_mission_client/pull/10)   
+  Contributors: [Burak Guler](https://github.com/gulerburak)
