@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -153,9 +153,11 @@ def generate_launch_description():
                           'use_namespace': use_namespace,
                           'rviz_config': rviz_config_dir}.items(),
     )
+
     return LaunchDescription(launch_args +
                              [json_info_generator_node,
                               nav2_bringup_launch,
                               mission_client_launch,
-                              rviz_launch
+                              rviz_launch,
+
                               ])

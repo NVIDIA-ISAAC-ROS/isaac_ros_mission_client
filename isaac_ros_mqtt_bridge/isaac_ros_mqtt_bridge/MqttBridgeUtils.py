@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,34 @@
 
 """This module provides utility functions for case conversion between MQTT and ROS."""
 
+import datetime
+from enum import Enum
+import json
 import re
+
+
+class State(Enum):
+    ONLINE = 0
+    OFFLINE = 1
+    CONNECTIONBROKEN = 2
+
+
+class ConnectionMessage:
+    """Connection message defined in VDA5050 spec."""
+
+    counter = 0
+
+    def __init__(self, manufacturer: str, serialNumber: str, connectionState: State):
+        self.headerId = ConnectionMessage.counter
+        ConnectionMessage.counter += 1
+        self.timestamp = datetime.datetime.now().isoformat()
+        self.version = '2.0.0'
+        self.manufacturer = manufacturer
+        self.serialNumber = serialNumber
+        self.connectionState = connectionState.name
+
+    def __str__(self):
+        return json.dumps(self.__dict__)
 
 
 def convert_camel_to_snake(camel_case_string: str) -> str:

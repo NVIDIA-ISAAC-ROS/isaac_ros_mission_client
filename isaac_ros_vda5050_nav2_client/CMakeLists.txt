@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,12 +45,14 @@ message( STATUS "Architecture: ${ARCHITECTURE}" )
 set(CUDA_MIN_VERSION "11.4")
 
 # find dependencies
-find_package(nav_msgs)
+find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs)
+find_package(opennav_docking_msgs)
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/MissionAction.action"
+  DEPENDENCIES geometry_msgs
 )
 ament_auto_add_library(vda5050_nav2_client_node SHARED
   src/vda5050_nav2_client_node.cpp)

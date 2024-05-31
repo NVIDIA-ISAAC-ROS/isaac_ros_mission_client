@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,10 @@ class RosToMqttNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('mqtt_pub_topic', 'dev/test'),
+                ('interface_name', 'uagv'),
+                ('major_version', 'v2'),
+                ('manufacturer', 'RobotCompany'),
+                ('serial_number', 'carter01'),
                 ('mqtt_client_name', 'RosToMqttBridge'),
                 ('mqtt_host_name', 'localhost'),
                 ('mqtt_port', 1883),
@@ -67,6 +70,13 @@ class RosToMqttNode(Node):
         if self.get_parameter('mqtt_transport').value == 'websockets' and \
                 self.get_parameter('mqtt_ws_path').value != '':
             self.mqtt_client.ws_set_options(path=self.get_parameter('mqtt_ws_path').value)
+
+        self.interface_name = self.get_parameter('interface_name').value
+        self.major_version = self.get_parameter('major_version').value
+        self.manufacturer = self.get_parameter('manufacturer').value
+        self.serial_number = self.get_parameter('serial_number').value
+        self.mqtt_topic_prefix = \
+            f'{self.interface_name}/{self.major_version}/{self.manufacturer}/{self.serial_number}'
 
         def on_mqtt_connect(client, userdata, flags, rc):
             self.get_logger().info(f'Connected with result code {str(rc)}')
@@ -118,12 +128,11 @@ class RosToMqttNode(Node):
         try:
             extracted = message_conversion.extract_values(msg)
             if self.get_parameter('convert_snake_to_camel').value:
-                self.mqtt_client.publish(self.get_parameter(
-                    'mqtt_pub_topic').value,
+                self.mqtt_client.publish(
+                    f'{self.mqtt_topic_prefix}/state',
                     json.dumps(convert_dict_keys(extracted, 'snake_to_dromedary')))
             else:
-                self.mqtt_client.publish(self.get_parameter(
-                    'mqtt_pub_topic').value, json.dumps(extracted))
+                self.mqtt_client.publish(f'{self.mqtt_topic_prefix}/state', json.dumps(extracted))
         except (message_conversion.FieldTypeMismatchException,
                 json.decoder.JSONDecodeError) as e:
             self.get_logger().info(repr(e))
