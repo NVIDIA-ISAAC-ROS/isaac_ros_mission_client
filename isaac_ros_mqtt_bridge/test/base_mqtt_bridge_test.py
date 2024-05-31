@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ import rclpy
 
 from std_msgs.msg import String
 
-FROM_MQTT_TOPIC = 'mqtt/from_broker'
-TO_MQTT_TOPIC = 'mqtt/to_broker'
+FROM_MQTT_TOPIC = 'uagv/v2/RobotCompany/carter01/state'
+TO_MQTT_TOPIC = 'uagv/v2/RobotCompany/carter01/order'
 FROM_ROS_TOPIC = 'bridge_pub_topic'
 TO_ROS_TOPIC = 'to_ros_topic'
 

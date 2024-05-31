@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import json
 import socket
 import time
 
+import isaac_ros_mqtt_bridge.MqttBridgeUtils as utils
 from isaac_ros_mqtt_bridge.MqttBridgeUtils import convert_dict_keys
 
 import paho.mqtt.client as mqtt
@@ -27,6 +28,7 @@ import rclpy
 from rclpy.node import Node
 from rosbridge_library.internal import message_conversion
 from rosbridge_library.internal import ros_loader
+from std_msgs.msg import String
 
 
 class MqttToRosNode(Node):
@@ -43,8 +45,10 @@ class MqttToRosNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('mqtt_sub_topic', 'dev/test'),
-                ('mqtt_sub_instant_actions', 'dev/test/instant_actions'),
+                ('interface_name', 'uagv'),
+                ('major_version', 'v2'),
+                ('manufacturer', 'RobotCompany'),
+                ('serial_number', 'carter01'),
                 ('mqtt_client_name', 'MqttBridge'),
                 ('mqtt_host_name', 'localhost'),
                 ('mqtt_port', 1883),
@@ -68,10 +72,24 @@ class MqttToRosNode(Node):
                 self.get_parameter('mqtt_ws_path').value != '':
             self.mqtt_client.ws_set_options(path=self.get_parameter('mqtt_ws_path').value)
 
+        self.interface_name = self.get_parameter('interface_name').value
+        self.major_version = self.get_parameter('major_version').value
+        self.manufacturer = self.get_parameter('manufacturer').value
+        self.serial_number = self.get_parameter('serial_number').value
+        self.mqtt_topic_prefix = \
+            f'{self.interface_name}/{self.major_version}/{self.manufacturer}/{self.serial_number}'
+
         def on_mqtt_connect(client, userdata, flags, rc):
             self.get_logger().info(f'Connected with result code {str(rc)}')
-            self.mqtt_client.subscribe(self.get_parameter('mqtt_sub_topic').value)
-            self.mqtt_client.subscribe(self.get_parameter('mqtt_sub_instant_actions').value)
+            self.mqtt_client.subscribe(f'{self.mqtt_topic_prefix}/order')
+            self.mqtt_client.subscribe(f'{self.mqtt_topic_prefix}/instantActions')
+            connection_message = utils.ConnectionMessage(self.manufacturer,
+                                                         self.serial_number,
+                                                         utils.State.ONLINE)
+
+            self.mqtt_client.publish(f'{self.mqtt_topic_prefix}/connection',
+                                     str(connection_message),
+                                     qos=1, retain=True)
 
         def on_mqtt_disconnect(client, userdata, rc):
             if rc != 0:
@@ -106,6 +124,9 @@ class MqttToRosNode(Node):
             except (message_conversion.FieldTypeMismatchException,
                     json.decoder.JSONDecodeError) as e:
                 self.get_logger().info(repr(e))
+                error_msg = String()
+                error_msg.data = repr(e)
+                self.error_publisher.publish(error_msg)
 
         self.mqtt_client.on_message = on_mqtt_message
 
@@ -117,6 +138,16 @@ class MqttToRosNode(Node):
         self.instant_actions_publisher = self.create_publisher(
             ros_loader.get_message_class('vda5050_msgs/InstantActions'),
             'instant_actions_commands', self.get_parameter('ros_publisher_queue').value)
+
+        self.error_publisher = self.create_publisher(
+            String, 'order_valid_error', self.get_parameter('ros_publisher_queue').value)
+        # Set a Will message to be sent by the broker in case of disconnection unexpectedly.
+        will_message = utils.ConnectionMessage(self.manufacturer,
+                                               self.serial_number,
+                                               utils.State.CONNECTIONBROKEN)
+        msg_payload = str(will_message)
+        self.mqtt_client.will_set(f'{self.mqtt_topic_prefix}/connection',
+                                  payload=msg_payload, qos=1, retain=True)
 
         max_retries = self.get_parameter('num_retries').value
         retries = 0
@@ -148,14 +179,28 @@ class MqttToRosNode(Node):
         else:
             self.get_logger().error('Failed to connect to MQTT broker, ending retries.')
 
+    def disconnect(self):
+        """Disconnect mqtt client and send OFFLINE message."""
+        disconnect_message = utils.ConnectionMessage(self.manufacturer,
+                                                     self.serial_number,
+                                                     utils.State.OFFLINE)
+        self.mqtt_client.publish(f'{self.mqtt_topic_prefix}/connection',
+                                 str(disconnect_message), 1, True)
+        self.mqtt_client.disconnect()
+        self.mqtt_client.loop_stop()
+
 
 def main(args=None):
     """Execute the MqttToRosNode."""
     rclpy.init(args=args)
     node = MqttToRosNode('mqtt_to_ros_bridge_node')
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.disconnect()
+    finally:
+        node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

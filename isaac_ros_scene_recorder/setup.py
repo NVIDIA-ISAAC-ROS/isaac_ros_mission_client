@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='Yu Zhou',
-    maintainer_email='yuzho@nvidia.com',
+    maintainer='Isaac ROS Maintainers',
+    maintainer_email='isaac-ros-maintainers@nvidia.com',
     description='ROS scene recorder',
     license='Apache-2.0',
     tests_require=['pytest'],

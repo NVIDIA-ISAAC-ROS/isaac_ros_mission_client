@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,16 +55,20 @@ class Nav2SimpleServer(Node):
         )
         self._action_server = ActionServer(self, NavigateThroughPoses,
                                            'navigate_through_poses',
-                                           self.callback)
+                                           self.callback, goal_callback=self.goal_callback,
+                                           cancel_callback=self.cancel_callback)
         self.tf_broadcaster = TransformBroadcaster(self)
+        self._completed_poses = 0
 
     def callback(self, goal_handle):
         if len(goal_handle.request.poses) == 0:
             return GoalResponse.REJECT
+        self.get_logger().info('Executing goal...')
         start_pos = self.get_parameter('start_x_pos').value
         feedback_msg = NavigateThroughPoses.Feedback()
         feedback_msg.current_pose.pose.position.x = start_pos
-
+        feedback_msg.number_of_poses_remaining = len(goal_handle.request.poses)
+        self._completed_poses = 0
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'map'
@@ -82,18 +86,33 @@ class Nav2SimpleServer(Node):
         # Send the transformation
         self.tf_broadcaster.sendTransform(t)
         current_pos = start_pos
-        while current_pos <= goal_handle.request.poses[-1].pose.position.x:
+        while current_pos < goal_handle.request.poses[-1].pose.position.x:
             t.header.stamp = self.get_clock().now().to_msg()
             self.tf_broadcaster.sendTransform(t)
+            if current_pos >= goal_handle.request.poses[self._completed_poses].pose.position.x:
+                self._completed_poses += 1
+                feedback_msg.number_of_poses_remaining -= 1
+            feedback_msg.current_pose.pose.position.x = current_pos
             goal_handle.publish_feedback(feedback_msg)
             current_pos += self.get_parameter('x_pos_increment').value
-            feedback_msg.current_pose.pose.position.x = current_pos
             time.sleep(0.5)
 
         goal_handle.succeed()
 
         result = NavigateThroughPoses.Result()
         return result
+
+    def goal_callback(self, goal_request):
+        self.get_logger().info('received a goal')
+        return rclpy.action.server.GoalResponse.ACCEPT
+
+    def cancel_callback(
+            self,
+            goal_handle: rclpy.action.server.ServerGoalHandle
+            ) -> rclpy.action.CancelResponse:
+        self.get_logger().info('cancel requested: [{goal_id}]'.format(
+            goal_id=goal_handle.goal_id))
+        return rclpy.action.CancelResponse.ACCEPT
 
 
 def main(args=None):

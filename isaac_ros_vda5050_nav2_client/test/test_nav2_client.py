@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ INSTANT_ORDER_TOPIC = 'instant_orders'
 ORDER_INFO_TOPIC = 'agv_state'
 BATTERY_STATE_TOPIC = 'battery_state'
 START_X_POS = 1.0
+STARTUP_TIME = 3
+TIMEOUT = 10
 
 
 @pytest.mark.rostest
@@ -234,6 +236,92 @@ class Nav2ClientTest(IsaacROSBaseTest):
             return True
         return False
 
+    def is_action_running(self, received_messages, action_idx=0):
+        if len(received_messages[ORDER_INFO_TOPIC]) > 0 and \
+           len(received_messages[ORDER_INFO_TOPIC][-1].action_states) > action_idx:
+            if received_messages[ORDER_INFO_TOPIC][-1].action_states[action_idx].action_status \
+               != 'WAITING':
+                return True
+        return False
+
+    def teleop_with_api(self, received_messages, order_pub, instant_order_pub, node_positions):
+        """Test Teleop with StartTeleop/StopTeleop instant actions."""
+        order_id = 'teleop_with_api'
+        received_messages[ORDER_INFO_TOPIC].clear()
+        node_actions = [[], []]
+        teleop_order = self.create_order(order_id, node_positions, node_actions)
+        # Test startTeleop instant action.
+        start_teleop_instant_order = InstantActions()
+        start_teleop_instant_order.instant_actions = [
+            Action(action_type='startTeleop', action_id='start_teleop_0')]
+        # Test stopTeleop instant action.
+        stop_teleop_instant_order = InstantActions()
+        stop_teleop_instant_order.instant_actions = [
+            Action(action_type='stopTeleop', action_id='stop_teleop_0')]
+        # Expected state.
+        expected_teleop = self.create_agv_state(
+            order_id, str(len(node_positions) - 1), True, node_positions[-1][0])
+        expected_teleop.action_states = [
+            ActionState(action_id='start_teleop_0', action_type='startTeleop',
+                        action_status='FINISHED'),
+            ActionState(action_id='stop_teleop_0', action_type='stopTeleop',
+                        action_status='FINISHED')
+        ]
+        order_pub.publish(teleop_order)
+        rclpy.spin_once(self.node, timeout_sec=(0.1))
+        instant_order_pub.publish(start_teleop_instant_order)
+        end_time = time.time() + TIMEOUT
+        i = 0
+        while time.time() < end_time:
+            # Simulate teleop
+            if i == 3:
+                instant_order_pub.publish(stop_teleop_instant_order)
+            rclpy.spin_once(self.node, timeout_sec=(0.1))
+            if self.is_order_completed(received_messages, '1') and \
+               received_messages[ORDER_INFO_TOPIC][-1].agv_position.x == node_positions[-1][0]:
+                break
+            i += 1
+        self.assertGreater(len(received_messages[ORDER_INFO_TOPIC]), 0,
+                           'Appropriate output not received')
+        self.verify_results(received_messages, expected_teleop)
+
+    def teleop_with_mission_node(self, received_messages, order_pub,
+                                 instant_order_pub, node_positions):
+        """Test Teleop with pause order mission node."""
+        order_id = 'teleop_with_mission_node'
+        received_messages[ORDER_INFO_TOPIC].clear()
+        pause_order_action = [Action(action_type='pause_order',
+                              action_id='pause_order_1',
+                              action_parameters=[])]
+        node_actions = [[], pause_order_action]
+        teleop_order = self.create_order(order_id, node_positions, node_actions)
+        stop_teleop_instant_order = InstantActions()
+        stop_teleop_instant_order.instant_actions = [
+            Action(action_type='stopTeleop', action_id='stop_teleop')]
+        # Expected state
+        expected_teleop = self.create_agv_state(
+            order_id, str(len(node_positions) - 1), True, node_positions[-1][0])
+        expected_teleop.action_states = [
+            ActionState(action_id='pause_order_1', action_type='pause_order',
+                        action_status='FINISHED'),
+            ActionState(action_id='stop_teleop', action_type='stopTeleop',
+                        action_status='FINISHED')
+        ]
+        order_pub.publish(teleop_order)
+        rclpy.spin_once(self.node, timeout_sec=(0.1))
+        end_time = time.time() + TIMEOUT
+        stop_order_published = False
+        while time.time() < end_time:
+            if self.is_action_running(received_messages, 0) and not stop_order_published:
+                stop_order_published = True
+                instant_order_pub.publish(stop_teleop_instant_order)
+            rclpy.spin_once(self.node, timeout_sec=(0.1))
+            if self.is_order_completed(received_messages, '1'):
+                break
+        self.assertGreater(len(received_messages[ORDER_INFO_TOPIC]), 0,
+                           'Appropriate output not received')
+        self.verify_results(received_messages, expected_teleop)
+
     def test_nav2_client(self):
         """
         Test for the client node.
@@ -242,8 +330,6 @@ class Nav2ClientTest(IsaacROSBaseTest):
         published by the client node through AGVState messages. The AGVState
         messages are validated through the verify_results() message implemented above.
         """
-        STARTUP_TIME = 3
-        TIMEOUT = 10
         received_messages = {}
 
         self.generate_namespace_lookup([ORDER_TOPIC, INSTANT_ORDER_TOPIC, ORDER_INFO_TOPIC,
@@ -290,7 +376,7 @@ class Nav2ClientTest(IsaacROSBaseTest):
         expected_last_msg = self.create_agv_state(
             order_id, str(len(node_positions) - 1), True, end_x)
         expected_last_msg.action_states.append(
-            ActionState(action_id='0', action_status='FINISHED')
+            ActionState(action_id='0', action_type='dummy_action', action_status='FINISHED')
         )
         expected_last_msgs.append(expected_last_msg)
 
@@ -309,10 +395,10 @@ class Nav2ClientTest(IsaacROSBaseTest):
         expected_last_msg = self.create_agv_state(
             order_id, str(len(node_positions) - 1), True, end_x)
         expected_last_msg.action_states.append(
-            ActionState(action_id='0', action_status='FINISHED')
+            ActionState(action_id='0', action_type='dummy_action', action_status='FINISHED')
         )
         expected_last_msg.action_states.append(
-            ActionState(action_id='1', action_status='FAILED')
+            ActionState(action_id='1', action_type='dummy_action', action_status='FAILED')
         )
         expected_last_msgs.append(expected_last_msg)
 
@@ -325,8 +411,8 @@ class Nav2ClientTest(IsaacROSBaseTest):
         expected_last_msg = self.create_agv_state(
             order_id, str(len(node_positions) - 1), True, end_x)
         expected_last_msg.action_states = [
-            ActionState(action_id='0', action_status='FAILED'),
-            ActionState(action_id='1', action_status='FAILED'),
+            ActionState(action_id='0', action_type='dummy_action', action_status='FAILED'),
+            ActionState(action_id='1', action_type='dummy_action', action_status='FAILED'),
             ActionState(action_id='2', action_type='cancelOrder', action_status='FINISHED')
         ]
 
@@ -343,6 +429,14 @@ class Nav2ClientTest(IsaacROSBaseTest):
         ]
 
         try:
+            # Test teleop with mission node
+            self.teleop_with_mission_node(
+                received_messages, order_pub, instant_order_pub, [(2.0, 0.0), (1.0, 0.0)])
+
+            # Test Teleop with API calls
+            self.teleop_with_api(
+                received_messages, order_pub, instant_order_pub, [(1.0, 0.0), (2.0, 0.0)])
+
             for i, order in enumerate(orders):
                 received_messages[ORDER_INFO_TOPIC].clear()
                 last_node_id = str(len(order.nodes) - 1)
@@ -356,7 +450,6 @@ class Nav2ClientTest(IsaacROSBaseTest):
 
                     if self.is_order_completed(received_messages, last_node_id):
                         break
-
                 self.assertGreater(len(received_messages[ORDER_INFO_TOPIC]), 0,
                                    'Appropriate output not received')
                 self.verify_results(received_messages, expected_last_msgs[i])

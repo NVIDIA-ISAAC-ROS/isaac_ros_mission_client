@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,8 +43,7 @@ def generate_test_description():
         parameters=[{
             'ros_publisher_type': 'std_msgs/String',
             'mqtt_port': PORT,
-            'mqtt_transport': 'websockets',
-            'mqtt_sub_topic': base_mqtt_bridge_test.TO_MQTT_TOPIC
+            'mqtt_transport': 'websockets'
         }],
         output='screen'
     )
@@ -57,8 +56,7 @@ def generate_test_description():
         parameters=[{
             'ros_subscriber_type': 'std_msgs/String',
             'mqtt_port': PORT,
-            'mqtt_transport': 'websockets',
-            'mqtt_pub_topic': base_mqtt_bridge_test.FROM_MQTT_TOPIC
+            'mqtt_transport': 'websockets'
         }],
         remappings=[('ros_sub_topic', base_mqtt_bridge_test.TO_ROS_TOPIC)],
         output='screen'

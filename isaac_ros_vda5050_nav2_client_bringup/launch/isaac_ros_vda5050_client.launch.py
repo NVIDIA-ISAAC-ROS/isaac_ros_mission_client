@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,17 +32,19 @@ def generate_launch_description():
         DeclareLaunchArgument('mqtt_transport', default_value='tcp',
                               description='Protocol for MQTT messages to be sent (pass either tcp'
                                           'or websockets)'),
-        DeclareLaunchArgument('mqtt_pub_topic', default_value='uagv/v1/carter01/state',
-                              description='MQTT topic to publish to'),
+        DeclareLaunchArgument('interface_name', default_value='uagv',
+                              description='Name of the used interface. Used to construct mqtt '
+                                          'topic names.'),
+        DeclareLaunchArgument('major_version', default_value='v2',
+                              description='VDA5050 major version.'),
+        DeclareLaunchArgument('manufacturer', default_value='RobotCompany',
+                              description='Manufacturer of the AGV.'),
+        DeclareLaunchArgument('serial_number', default_value='carter01',
+                              description='Unique AGV Serial Number'),
         DeclareLaunchArgument('ros_subscriber_type', default_value='vda5050_msgs/AGVState',
                               description='ROS message type to convert to outgoing MQTT message'),
         DeclareLaunchArgument('ros_to_mqtt_name', default_value='Carter01_RosToMqttBridge',
                               description='MQTT client name for RosToMqtt Node'),
-        DeclareLaunchArgument('mqtt_sub_topic', default_value='uagv/v1/carter01/order',
-                              description='MQTT topic to subscribe to'),
-        DeclareLaunchArgument('mqtt_sub_instant_actions',
-                              default_value='uagv/v1/carter01/instantActions',
-                              description='MQTT topic to subscribe to'),
         DeclareLaunchArgument('ros_publisher_type', default_value='vda5050_msgs/Order',
                               description='ROS message type to convert received MQTT message to'),
         DeclareLaunchArgument('mqtt_to_ros_name', default_value='Carter01_MqttToRosBridge',
@@ -59,17 +61,20 @@ def generate_launch_description():
                               description='Number of reconnection retries to MQTT message broker'
                                           'before giving up'),
         DeclareLaunchArgument('ros_recorder', default_value='false',
-                              description='Launch ROS scene recorder if true')
+                              description='Launch ROS scene recorder if true'),
+        DeclareLaunchArgument('docking_server_enabled', default_value='false',
+                              description='Pause the docking server in initialization'),
+        DeclareLaunchArgument('odom_topic', default_value='/chassis/odom',
+                              description='The topic that publishes nav_msgs/Odometry message.'),
+        DeclareLaunchArgument('battery_state_topic', default_value='/chassis/battery_state',
+                              description='The topic that publishes battery state message.'),
     ]
 
     namespace = LaunchConfiguration('namespace')
     mqtt_host_name = LaunchConfiguration('mqtt_host_name')
     mqtt_transport = LaunchConfiguration('mqtt_transport')
-    mqtt_pub_topic = LaunchConfiguration('mqtt_pub_topic')
     ros_subscriber_type = LaunchConfiguration('ros_subscriber_type')
     ros_to_mqtt_name = LaunchConfiguration('ros_to_mqtt_name')
-    mqtt_sub_topic = LaunchConfiguration('mqtt_sub_topic')
-    mqtt_sub_instant_actions = LaunchConfiguration('mqtt_sub_instant_actions')
     ros_publisher_type = LaunchConfiguration('ros_publisher_type')
     mqtt_to_ros_name = LaunchConfiguration('mqtt_to_ros_name')
     mqtt_port = LaunchConfiguration('mqtt_port')
@@ -77,6 +82,13 @@ def generate_launch_description():
     reconnect_period = LaunchConfiguration('reconnect_period')
     num_retries = LaunchConfiguration('num_retries')
     ros_recorder = LaunchConfiguration('ros_recorder')
+    interface_name = LaunchConfiguration('interface_name')
+    major_version = LaunchConfiguration('major_version')
+    manufacturer = LaunchConfiguration('manufacturer')
+    serial_number = LaunchConfiguration('serial_number')
+    docking_server_enabled = LaunchConfiguration('docking_server_enabled')
+    odom_topic = LaunchConfiguration('odom_topic')
+    battery_state_topic = LaunchConfiguration('battery_state_topic')
 
     client_node = Node(
         namespace=namespace,
@@ -87,7 +99,11 @@ def generate_launch_description():
             'update_feedback_period': 1.0,
             'verbose': False,
             'action_server_names': ['recorder'],
-            'recorder': ['start_recording', 'stop_recording']
+            'recorder': ['start_recording', 'stop_recording'],
+            'load_cloud_map_action': ['load_map'],
+            'docking_server_enabled': docking_server_enabled,
+            'odom_topic': odom_topic,
+            'battery_state_topic': battery_state_topic,
         }],
         output='screen'
     )
@@ -99,7 +115,10 @@ def generate_launch_description():
         parameters=[{
             'mqtt_host_name': mqtt_host_name,
             'mqtt_transport': mqtt_transport,
-            'mqtt_pub_topic': mqtt_pub_topic,
+            'interface_name': interface_name,
+            'major_version': major_version,
+            'manufacturer': manufacturer,
+            'serial_number': serial_number,
             'ros_subscriber_type': ros_subscriber_type,
             'mqtt_client_name': ros_to_mqtt_name,
             'mqtt_port': mqtt_port,
@@ -119,8 +138,10 @@ def generate_launch_description():
         parameters=[{
             'mqtt_host_name': mqtt_host_name,
             'mqtt_transport': mqtt_transport,
-            'mqtt_sub_topic': mqtt_sub_topic,
-            'mqtt_sub_instant_actions': mqtt_sub_instant_actions,
+            'interface_name': interface_name,
+            'major_version': major_version,
+            'manufacturer': manufacturer,
+            'serial_number': serial_number,
             'ros_publisher_type': ros_publisher_type,
             'mqtt_client_name': mqtt_to_ros_name,
             'mqtt_port': mqtt_port,

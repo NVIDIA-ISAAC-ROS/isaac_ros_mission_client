@@ -39,16 +39,12 @@ Please visit the [Isaac ROS Documentation](https://nvidia-isaac-ros.github.io/re
 
 ## Packages
 
-* [Isaac ROS Mission Client](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html)
+* [`isaac_ros_mission_client`](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html)
   * [Overview](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html#overview)
-  * [Usage](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html#usage)
-  * [ROS Parameters](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html#ros-parameters)
-* [Isaac ROS Scene Recorder](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_scene_recorder/index.html)
-  * [Quickstart](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_scene_recorder/index.html#quickstart)
-* [Isaac ROS VDA5050 NAV2 Client](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client/index.html)
-  * [Overview](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client/index.html#overview)
-  * [Usage](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client/index.html#usage)
-  * [ROS Parameters](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_vda5050_nav2_client/index.html#ros-parameters)
+  * [Quickstart](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html#quickstart)
+  * [API](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_mission_client/index.html#api)
+* [`isaac_ros_scene_recorder`](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_scene_recorder/index.html)
+  * [Usage](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mission_client/isaac_ros_scene_recorder/index.html#usage)
 
 ## Quickstart
 
@@ -56,9 +52,9 @@ A Quickstart with Isaac Sim is [here](https://nvidia-isaac-ros.github.io/concept
 
 ## Latest
 
-Update 2023-10-18: Bugfixes, Mission Cancellation, initial pose
+Update 2024-05-30: Update to be compatible with JetPack 6.0
 
 ## Contributors
 
-- Add velocities to the status message [(#10)](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_mission_client/pull/10)   
-  Contributors: [Burak Guler](https://github.com/gulerburak)
+- Add velocities to the status message [(#10)]([https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_mission_client/pull/10](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_mission_client/pull/10))
+  Contributors: [Burak Guler]([https://github.com/gulerburak](https://github.com/gulerburak))
