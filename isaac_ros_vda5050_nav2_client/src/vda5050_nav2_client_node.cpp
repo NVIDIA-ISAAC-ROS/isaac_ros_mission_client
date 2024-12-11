@@ -23,6 +23,7 @@
 #include <memory>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -47,10 +48,20 @@ constexpr char kOrderUpdateError[] = "orderUpdateError";
 
 constexpr char kRobotDockAction[] = "dock_robot";
 constexpr char kRobotUndockAction[] = "undock_robot";
-
 constexpr char kDockType[] = "dock_type";
 constexpr char kDockPose[] = "dock_pose";
 constexpr char kTriggerGlobalLocalization[] = "trigger_global_localization";
+
+constexpr char kGetObjectsAction[] = "get_objects";
+constexpr char kPickAndPlaceAction[] = "pick_and_place";
+
+constexpr char kObjectId[] = "object_id";
+constexpr char kClassId[] = "class_id";
+constexpr char kPlacePose[] = "place_pose";
+
+constexpr char kClearObjects[] = "clear_objects";
+constexpr char kObjectIds[] = "object_ids";
+
 
 std::vector<std::string> split(const std::string & s, char delimiter)
 {
@@ -79,6 +90,106 @@ bool stringToBool(const std::string & s)
     [](unsigned char c) {return std::tolower(c);});
   return lower_str == "true" || lower_str == "1";
 }
+
+std::string jsonFromDetection2D(const vision_msgs::msg::Detection2D & detection)
+{
+  std::ostringstream json_result;
+  if (detection.results.size() == 0) {
+    return "";
+  }
+  json_result << std::fixed << std::setprecision(3);  // Setting precision for double values
+  json_result << "  \"bbox2d\": {\n"
+              << "    \"center\": {\n"
+              << "      \"x\": " << detection.bbox.center.position.x << ",\n"
+              << "      \"y\": " << detection.bbox.center.position.y << ",\n"
+              << "      \"theta\": " << detection.bbox.center.theta << "\n"
+              << "    },\n"
+              << "    \"size_x\": " << detection.bbox.size_x << ",\n"
+              << "    \"size_y\": " << detection.bbox.size_y << "\n"
+              << "  }";
+  return json_result.str();
+}
+
+std::string jsonFromDetection3D(const vision_msgs::msg::Detection3D & detection)
+{
+  std::ostringstream json_result;
+  if (detection.results.size() == 0) {
+    return "";
+  }
+  json_result << std::fixed << std::setprecision(3);  // Setting precision for double values
+  json_result << "  \"bbox3d\": {\n"
+              << "    \"center\": {\n"
+              << "      \"position\": {\n"
+              << "        \"x\": " << detection.bbox.center.position.x << ",\n"
+              << "        \"y\": " << detection.bbox.center.position.y << ",\n"
+              << "        \"z\": " << detection.bbox.center.position.z << "\n"
+              << "      },\n"
+              << "      \"orientation\": {\n"
+              << "        \"x\": " << detection.bbox.center.orientation.x << ",\n"
+              << "        \"y\": " << detection.bbox.center.orientation.y << ",\n"
+              << "        \"z\": " << detection.bbox.center.orientation.z << ",\n"
+              << "        \"w\": " << detection.bbox.center.orientation.w << "\n"
+              << "      }\n"
+              << "    },\n"
+              << "    \"size_x\": " << detection.bbox.size.x << ",\n"
+              << "    \"size_y\": " << detection.bbox.size.y << ",\n"
+              << "    \"size_z\": " << detection.bbox.size.z << "\n"
+              << "  }";
+  return json_result.str();
+}
+
+std::string getClassId(const std::vector<vision_msgs::msg::ObjectHypothesisWithPose> & objects)
+{
+  std::string class_id = "";
+  double score = -1;
+  for (size_t i = 0; i < objects.size(); i++) {
+    if (objects[i].hypothesis.score > score) {
+      score = objects[i].hypothesis.score;
+      class_id = objects[i].hypothesis.class_id;
+    }
+  }
+  return class_id;
+}
+
+std::string jsonFromObjectInfo(const isaac_manipulator_interfaces::msg::ObjectInfo & object_info)
+{
+  std::ostringstream json_result;
+  std::string detection_2d = jsonFromDetection2D(object_info.detection_2d);
+  std::string detection_3d = jsonFromDetection3D(object_info.detection_3d);
+  std::string class_id = "";
+  if (object_info.detection_2d.results.size() > 0) {
+    class_id = getClassId(object_info.detection_2d.results);
+  } else {
+    class_id = getClassId(object_info.detection_3d.results);
+  }
+  json_result << "{\n"
+              << "  \"object_id\": \"" << std::to_string(object_info.object_id) << "\",\n"
+              << "  \"class_id\": \"" << class_id << "\",\n";
+  if (detection_2d.length() > 0) {
+    json_result << detection_2d << ((detection_3d.length() > 0) ? ",\n" : "");
+  }
+  if (detection_3d.length() > 0) {
+    json_result << detection_3d;
+  }
+  json_result << "\n}";
+  return json_result.str();
+}
+
+std::string jsonFromGetObjectsResult(
+  const isaac_ros::mission_client::Vda5050toNav2ClientNode::GoalHandleGetObjectsAction::
+  WrappedResult & result)
+{
+  std::string json_result = "[\n";
+  for (size_t i = 0; i < result.result->objects.size(); i++) {
+    if (i != 0) {
+      json_result += ", ";
+    }
+    json_result += jsonFromObjectInfo(result.result->objects[i]);
+  }
+  json_result += "\n]";
+  return json_result;
+}
+
 }  // namespace
 enum ErrorLevel { WARNING, FATAL };
 
@@ -107,15 +218,17 @@ void Vda5050toNav2ClientNode::ActionResponseCallback(
 template<typename ResultType>
 void Vda5050toNav2ClientNode::ActionResultCallback(
   const ResultType & result,
+  const bool & success,
   const size_t & action_state_idx,
-  const std::string & description)
+  const std::string & description,
+  const int & error_code)
 {
   std::lock_guard<std::mutex> lock(order_mutex_);
   auto action_id =
     agv_state_->action_states[action_state_idx].action_id;
   switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
-      if (result.result->success) {
+      if (success) {
         RCLCPP_INFO(
           get_logger(), "Action %s was succeeded",
           action_id.c_str());
@@ -126,20 +239,22 @@ void Vda5050toNav2ClientNode::ActionResultCallback(
           get_logger(), "Action %s was failed",
           action_id.c_str());
         UpdateActionState(
-          action_state_idx, VDAActionState().FAILED, description);
+          action_state_idx, VDAActionState().FAILED, description, error_code);
       }
       return;
     case rclcpp_action::ResultCode::ABORTED:
       RCLCPP_ERROR(
         get_logger(), "Action %s was aborted",
         action_id.c_str());
-      UpdateActionState(action_state_idx, VDAActionState().FAILED, "Action is aborted");
+      UpdateActionState(
+        action_state_idx, VDAActionState().FAILED, "Action is aborted", error_code);
       return;
     case rclcpp_action::ResultCode::CANCELED:
       RCLCPP_ERROR(
         get_logger(), "Action %s was canceled",
         action_id.c_str());
-      UpdateActionState(action_state_idx, VDAActionState().FAILED, "Action is canceled");
+      UpdateActionState(
+        action_state_idx, VDAActionState().FAILED, "Action is canceled", error_code);
       return;
     default:
       RCLCPP_ERROR(this->get_logger(), "Unknown result code");
@@ -157,6 +272,8 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
     rclcpp_action::create_client<NavThroughPoses>(this, "navigate_through_poses")),
   order_info_pub_(
     create_publisher<vda5050_msgs::msg::AGVState>("agv_state", 1)),
+  factsheet_info_pub_(
+    create_publisher<vda5050_msgs::msg::Factsheet>("factsheet", 1)),
   order_id_pub_(create_publisher<std_msgs::msg::String>("order_id", 1)),
   order_sub_(create_subscription<vda5050_msgs::msg::Order>(
       "client_commands", rclcpp::SensorDataQoS(),
@@ -200,15 +317,27 @@ Vda5050toNav2ClientNode::Vda5050toNav2ClientNode(
       std::chrono::duration<double>(update_order_id_period_),
       std::bind(&Vda5050toNav2ClientNode::OrderIdCallback, this))),
   agv_state_(std::make_shared<vda5050_msgs::msg::AGVState>()),
+  factsheet_(std::make_shared<vda5050_msgs::msg::Factsheet>()),
   reached_waypoint_(false),
   pause_order_(false),
   current_node_(0),
   next_stop_(0),
   current_node_action_(0),
-  current_action_state_(0)
+  current_action_state_(0),
+  robot_type_(declare_parameter<std::string>("robot_type", "amr"))
 {
+  agv_state_->operating_mode = vda5050_msgs::msg::AGVState().AUTOMATIC;
+  agv_state_->safety_state.e_stop = vda5050_msgs::msg::SafetyState().NONE;
+  agv_state_->safety_state.field_violation = false;
   dock_client_ = rclcpp_action::create_client<DockAction>(this, kRobotDockAction);
   undock_client_ = rclcpp_action::create_client<UndockAction>(this, kRobotUndockAction);
+  get_objects_client_ = rclcpp_action::create_client<GetObjectsAction>(
+    this,
+    kGetObjectsAction);
+  pick_and_place_client_ = rclcpp_action::create_client<PickPlaceAction>(
+    this,
+    kPickAndPlaceAction);
+  clear_objects_client_ = create_client<ClearObjectsService>(kClearObjects);
   // Callback group for services
   callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   executor_.add_callback_group(callback_group_, this->get_node_base_interface());
@@ -370,24 +499,26 @@ void Vda5050toNav2ClientNode::PublishRobotState()
 void Vda5050toNav2ClientNode::StateTimerCallback()
 {
   // Get robot position
-  try {
-    // Find the latest map_T_base_link transform
-    geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform(
-      "map", "base_link",
-      tf2::TimePointZero);
-    agv_state_->agv_position.x = t.transform.translation.x;
-    agv_state_->agv_position.y = t.transform.translation.y;
-    // Calculate robot orientation
-    tf2::Quaternion quaternion;
-    tf2::fromMsg(t.transform.rotation, quaternion);
-    tf2::Matrix3x3 matrix(quaternion);
-    double roll, pitch, yaw;
-    matrix.getEulerYPR(yaw, pitch, roll);
-    agv_state_->agv_position.theta = yaw;
-    agv_state_->agv_position.position_initialized = true;
-  } catch (const tf2::TransformException & ex) {
-    RCLCPP_ERROR(
-      this->get_logger(), "Could not get robot position: %s", ex.what());
+  if (robot_type_ == "amr") {
+    try {
+      // Find the latest map_T_base_link transform
+      geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform(
+        "map", "base_link",
+        tf2::TimePointZero);
+      agv_state_->agv_position.x = t.transform.translation.x;
+      agv_state_->agv_position.y = t.transform.translation.y;
+      // Calculate robot orientation
+      tf2::Quaternion quaternion;
+      tf2::fromMsg(t.transform.rotation, quaternion);
+      tf2::Matrix3x3 matrix(quaternion);
+      double roll, pitch, yaw;
+      matrix.getEulerYPR(yaw, pitch, roll);
+      agv_state_->agv_position.theta = yaw;
+      agv_state_->agv_position.position_initialized = true;
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_ERROR(
+        this->get_logger(), "Could not get robot position: %s", ex.what());
+    }
   }
   if (cancel_action_) {
     CancelOrder();
@@ -440,7 +571,9 @@ void Vda5050toNav2ClientNode::NavigateThroughPoses()
     RCLCPP_ERROR(get_logger(), "Navigation server not available");
     return;
   }
-
+  if (!current_order_) {
+    RCLCPP_ERROR(get_logger(), "Navigation was called when no order exists.");
+  }
   if (next_stop_ >= current_order_->nodes.size()) {
     RCLCPP_INFO(get_logger(), "Navigation completed");
     return;
@@ -509,7 +642,7 @@ void Vda5050toNav2ClientNode::Vda5050ActionsHandler(
   // Update action state to initializing
   size_t action_state_idx = current_action_state_;
   UpdateActionState(action_state_idx, VDAActionState().INITIALIZING);
-  std::map<std::string, std::string> action_parameters_map;
+  std::unordered_map<std::string, std::string> action_parameters_map;
   for (const auto & action_param : vda5050_action.action_parameters) {
     action_parameters_map[action_param.key] = action_param.value;
   }
@@ -527,7 +660,35 @@ void Vda5050toNav2ClientNode::Vda5050ActionsHandler(
     send_goal_options.result_callback =
       [this,
         action_state_idx](const GoalHandleDockAction::WrappedResult & result) {
-        ActionResultCallback<GoalHandleDockAction::WrappedResult>(result, action_state_idx);
+        std::string result_description = "";
+        switch (result.result->error_code) {
+          case DockAction::Result::UNKNOWN:
+            result_description = "Unknown";
+            break;
+          case DockAction::Result::DOCK_NOT_IN_DB:
+            result_description = "Dock not in DB";
+            break;
+          case DockAction::Result::DOCK_NOT_VALID:
+            result_description = "Dock not valid";
+            break;
+          case DockAction::Result::FAILED_TO_STAGE:
+            result_description = "Failed to stage";
+            break;
+          case DockAction::Result::FAILED_TO_DETECT_DOCK:
+            result_description = "Failed to detect dock";
+            break;
+          case DockAction::Result::FAILED_TO_CONTROL:
+            result_description = "Failed to control";
+            break;
+          case DockAction::Result::FAILED_TO_CHARGE:
+            result_description = "Failed to charge";
+            break;
+          default:
+            break;
+        }
+        ActionResultCallback<GoalHandleDockAction::WrappedResult>(
+          result, result.result->success, action_state_idx, result_description,
+          result.result->error_code);
         // Disable switch
         auto switch_request = std::make_shared<std_srvs::srv::SetBool::Request>();
         switch_request->data = false;
@@ -658,7 +819,24 @@ void Vda5050toNav2ClientNode::Vda5050ActionsHandler(
         server_request->command = nav2_msgs::srv::ManageLifecycleNodes_Request::PAUSE;
         SendBoolRequest<nav2_msgs::srv::ManageLifecycleNodes>(
           docking_lifecycle_manager_client_, server_request);
-        ActionResultCallback<GoalHandleUndockAction::WrappedResult>(result, action_state_idx);
+        // Parse error code
+        std::string result_description = "";
+        switch (result.result->error_code) {
+          case UndockAction::Result::UNKNOWN:
+            result_description = "Unknown";
+            break;
+          case UndockAction::Result::DOCK_NOT_VALID:
+            result_description = "Dock not valid";
+            break;
+          case UndockAction::Result::FAILED_TO_CONTROL:
+            result_description = "Failed to control";
+            break;
+          default:
+            break;
+        }
+        ActionResultCallback<GoalHandleUndockAction::WrappedResult>(
+          result, result.result->success, action_state_idx, result_description,
+          result.result->error_code);
         if (trigger_global_localization) {
           auto trigger_localization_request = std::make_shared<std_srvs::srv::Empty::Request>();
           SendServiceRequest<std_srvs::srv::Empty>(
@@ -685,6 +863,21 @@ void Vda5050toNav2ClientNode::Vda5050ActionsHandler(
       vda5050_action.action_type.c_str());
     return;
   }
+  // Handle detect object action
+  if (vda5050_action.action_type == kGetObjectsAction) {
+    getObjectsActionHandler();
+    return;
+  }
+  // Handle pick and place action
+  if (vda5050_action.action_type == kPickAndPlaceAction) {
+    pickPlaceActionHandler(action_parameters_map);
+    return;
+  }
+  // Handle clear objects action
+  if (vda5050_action.action_type == kClearObjects) {
+    clearObjectsHandler(action_parameters_map);
+    return;
+  }
   // Check if action server exists
   if (action_server_map_.count(vda5050_action.action_type) == 0) {
     RCLCPP_ERROR(
@@ -706,7 +899,7 @@ void Vda5050toNav2ClientNode::Vda5050ActionsHandler(
     [this,
       action_state_idx](const GoalHandleMissionAction::WrappedResult & result) {
       ActionResultCallback<GoalHandleMissionAction::WrappedResult>(
-        result, action_state_idx, result.result->result_description);
+        result, result.result->success, action_state_idx, result.result->result_description);
     };
   auto goal_msg = MissionAction::Goal();
   goal_msg.keys.push_back("action_type");
@@ -728,6 +921,9 @@ void Vda5050toNav2ClientNode::InitAGVState()
   RCLCPP_DEBUG(this->get_logger(), "Initialization order information");
   current_order_canceled_ = false;
   agv_state_.reset(new vda5050_msgs::msg::AGVState());
+  agv_state_->operating_mode = vda5050_msgs::msg::AGVState().AUTOMATIC;
+  agv_state_->safety_state.e_stop = vda5050_msgs::msg::SafetyState().NONE;
+  agv_state_->safety_state.field_violation = false;
   agv_state_->order_id = current_order_->order_id;
   agv_state_->last_node_id = current_order_->nodes[0].node_id;
   agv_state_->driving = false;
@@ -841,15 +1037,15 @@ void Vda5050toNav2ClientNode::InstantActionsCallback(
     if (action.action_type == "cancelOrder") {
       cancel_action_ = std::make_shared<vda5050_msgs::msg::Action>(action);
     } else if (action.action_type == "startTeleop" || action.action_type == "stopTeleop") {
-      lock.unlock();
       TeleopActionHandler(action);
+    } else if (action.action_type == "factsheetRequest") {
+      FactsheetRequestHandler(action);
     }
   }
 }
 
 void Vda5050toNav2ClientNode::TeleopActionHandler(const vda5050_msgs::msg::Action & teleop_action)
 {
-  std::unique_lock<std::mutex> lock(order_mutex_);
   UpdateActionStatebyId(teleop_action.action_id, VDAActionState().RUNNING);
   if (teleop_action.action_type == "startTeleop") {
     // Cancel any running navigation goal
@@ -867,18 +1063,39 @@ void Vda5050toNav2ClientNode::TeleopActionHandler(const vda5050_msgs::msg::Actio
     if (pause_order_action_id_ != "") {
       UpdateActionStatebyId(pause_order_action_id_, VDAActionState().FINISHED);
       pause_order_action_id_ = "";
-      // Finish the current order
-      current_node_action_++;
-      current_action_state_++;
-      lock.unlock();
-      execute_order();
-    } else {
-      // Resume order
-      lock.unlock();
-      NavigateThroughPoses();
     }
+    // Reset states to resume navigation
+    next_stop_ = current_node_;
+    reached_waypoint_ = true;
   }
   UpdateActionStatebyId(teleop_action.action_id, VDAActionState().FINISHED);
+}
+
+void Vda5050toNav2ClientNode::FactsheetRequestHandler(
+  const vda5050_msgs::msg::Action & factsheet_request)
+{
+  UpdateActionStatebyId(factsheet_request.action_id, VDAActionState().RUNNING);
+
+  if (factsheet_request.action_type == "factsheetRequest") {
+    if (robot_type_ == "arm") {
+      factsheet_->physical_parameters.speed_max = 0;
+      factsheet_->type_specification.agv_class = "FORKLIFT";
+    } else {
+      factsheet_->physical_parameters.speed_max = 1;
+      factsheet_->type_specification.agv_class = "CARRIER";
+    }
+
+    // publish the factsheet over the "factsheet" topic
+    PublishRobotFactsheet();
+  }
+
+  UpdateActionStatebyId(factsheet_request.action_id, VDAActionState().FINISHED);
+}
+
+void Vda5050toNav2ClientNode::PublishRobotFactsheet()
+{
+  factsheet_->timestamp = CreateISO8601Timestamp();
+  factsheet_info_pub_->publish(*factsheet_);
 }
 
 void Vda5050toNav2ClientNode::CancelOrder()
@@ -969,14 +1186,14 @@ void Vda5050toNav2ClientNode::UpdateActionStatebyId(
 
 void Vda5050toNav2ClientNode::UpdateActionState(
   const size_t & action_state_idx, const std::string & status,
-  const std::string & action_description)
+  const std::string & result_description, const int & error_code)
 {
   if (action_state_idx >= agv_state_->action_states.size()) {
     return;
   }
   agv_state_->action_states[action_state_idx].action_status = status;
   agv_state_->action_states[action_state_idx].result_description =
-    action_description;
+    result_description;
   if (status == VDAActionState().FAILED) {
     auto error = vda5050_msgs::msg::Error();
     error = CreateError(
@@ -986,7 +1203,9 @@ void Vda5050toNav2ClientNode::UpdateActionState(
           current_order_->nodes[current_node_].node_id),
         CreateErrorReference(
           "action_id",
-          agv_state_->action_states[action_state_idx].action_id)});
+          agv_state_->action_states[action_state_idx].action_id),
+        CreateErrorReference(
+          "error_code", std::to_string(error_code))});
     agv_state_->errors.push_back(error);
   }
   PublishRobotState();
@@ -1111,24 +1330,6 @@ void Vda5050toNav2ClientNode::OrderValidErrorCallback(
     kValidationError);
   agv_state_->errors.push_back(error);
 }
-void Vda5050toNav2ClientNode::SwitchServiceCallback(
-  rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future,
-  const size_t action_state_idx,
-  const DockAction::Goal & goal_msg,
-  const rclcpp_action::Client<DockAction>::SendGoalOptions & send_goal_options)
-{
-  std::lock_guard<std::mutex> lock(order_mutex_);
-  auto result = future.get();
-  if (!result->success) {
-    RCLCPP_ERROR(get_logger(), "Failed to call switch service");
-    UpdateActionState(action_state_idx, VDAActionState().FAILED, "Failed to call switch service");
-    return;
-  }
-  RCLCPP_DEBUG(get_logger(), "Switch node is enabled");
-  dock_client_->async_send_goal(goal_msg, send_goal_options);
-  RCLCPP_INFO(
-    this->get_logger(), "Send dock_robot request");
-}
 
 template<typename ServiceT>
 typename ServiceT::Response::SharedPtr Vda5050toNav2ClientNode::SendServiceRequest(
@@ -1157,6 +1358,119 @@ bool Vda5050toNav2ClientNode::SendBoolRequest(
   } catch (...) {
     return false;
   }
+}
+
+void Vda5050toNav2ClientNode::getObjectsActionHandler()
+{
+  // Check if action server is available
+  if (!get_objects_client_->wait_for_action_server(std::chrono::seconds(3))) {
+    RCLCPP_ERROR(get_logger(), "Get Objects server not available");
+    UpdateActionState(
+      current_action_state_, VDAActionState().FAILED, "Get Objects server not available");
+    return;
+  }
+  auto send_goal_options = rclcpp_action::Client<GetObjectsAction>::SendGoalOptions();
+  size_t action_state_idx = current_action_state_;
+  send_goal_options.goal_response_callback =
+    [this, action_state_idx](const GoalHandleGetObjectsAction::SharedPtr & goal) {
+      ActionResponseCallback<GetObjectsAction>(goal, action_state_idx);
+    };
+  send_goal_options.result_callback =
+    [this,
+      action_state_idx](const GoalHandleGetObjectsAction::WrappedResult & result) {
+      std::string json_result;
+      json_result = jsonFromGetObjectsResult(result);
+      ActionResultCallback<GoalHandleGetObjectsAction::WrappedResult>(
+        result, true, action_state_idx, json_result);
+    };
+  auto goal_msg = GetObjectsAction::Goal();
+  get_objects_client_->async_send_goal(goal_msg, send_goal_options);
+  return;
+}
+
+void Vda5050toNav2ClientNode::pickPlaceActionHandler(
+  std::unordered_map<std::string, std::string> & action_parameters_map)
+{
+  // Check if action server is available
+  if (!pick_and_place_client_->wait_for_action_server(std::chrono::seconds(3))) {
+    RCLCPP_ERROR(get_logger(), "Pick Place server not available");
+    UpdateActionState(
+      current_action_state_, VDAActionState().FAILED, "Pick Place server not available");
+    return;
+  }
+  auto send_goal_options = rclcpp_action::Client<PickPlaceAction>::SendGoalOptions();
+  size_t action_state_idx = current_action_state_;
+  send_goal_options.goal_response_callback =
+    [this, action_state_idx](const GoalHandlePickPlaceAction::SharedPtr & goal) {
+      ActionResponseCallback<PickPlaceAction>(goal, action_state_idx);
+    };
+  send_goal_options.result_callback =
+    [this,
+      action_state_idx](const GoalHandlePickPlaceAction::WrappedResult & result) {
+      ActionResultCallback<GoalHandlePickPlaceAction::WrappedResult>(
+        result, true, action_state_idx, "");
+    };
+  auto goal_msg = PickPlaceAction::Goal();
+
+  try {
+    goal_msg.object_id = std::stoi(action_parameters_map[kObjectId]);
+    goal_msg.class_id = action_parameters_map[kClassId];
+
+    std::vector<std::string> place_pose = split(action_parameters_map[kPlacePose], ',');
+
+    goal_msg.place_pose.position.x = std::stod(place_pose[0]);
+    goal_msg.place_pose.position.y = std::stod(place_pose[1]);
+    goal_msg.place_pose.position.z = std::stod(place_pose[2]);
+
+    goal_msg.place_pose.orientation.x = std::stod(place_pose[3]);
+    goal_msg.place_pose.orientation.y = std::stod(place_pose[4]);
+    goal_msg.place_pose.orientation.z = std::stod(place_pose[5]);
+    goal_msg.place_pose.orientation.w = std::stod(place_pose[6]);
+  } catch (std::out_of_range & e) {
+    UpdateActionState(
+      current_action_state_, VDAActionState().FAILED, "Invalid action parameters");
+    return;
+  } catch (std::invalid_argument & e) {
+    UpdateActionState(
+      current_action_state_, VDAActionState().FAILED, "Invalid action parameters");
+    return;
+  }
+  pick_and_place_client_->async_send_goal(goal_msg, send_goal_options);
+  return;
+}
+
+void Vda5050toNav2ClientNode::clearObjectsHandler(
+  std::unordered_map<std::string, std::string> & action_parameters_map)
+{
+  if (!clear_objects_client_->wait_for_service(std::chrono::seconds(3))) {
+    RCLCPP_ERROR(get_logger(), "Clear Objects Service is not available.");
+    UpdateActionState(
+      current_action_state_, VDAActionState().FAILED, "Clear Objects Service is not available.");
+  }
+  UpdateActionState(current_action_state_, VDAActionState().RUNNING);
+  auto request = std::make_shared<ClearObjectsService::Request>();
+  std::vector<std::string> object_ids = split(action_parameters_map[kObjectIds], ',');
+  for (auto & object_id : object_ids) {
+    request->object_ids.push_back(std::stoi(object_id));
+  }
+  clear_objects_client_->async_send_request(
+    request,
+    [this](const rclcpp::Client<ClearObjectsService>::SharedFuture future) {
+      try {
+        auto response = future.get();
+        if (response) {
+          UpdateActionState(
+            current_action_state_, VDAActionState().FINISHED);
+        } else {
+          UpdateActionState(
+            current_action_state_, VDAActionState().FAILED, "Failed to call ClearObjects service");
+        }
+      } catch (std::exception & e) {
+        UpdateActionState(
+          current_action_state_, VDAActionState().FAILED, "Failed to call ClearObjects service");
+      }
+    });
+  return;
 }
 
 Vda5050toNav2ClientNode::~Vda5050toNav2ClientNode() = default;

@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,22 +19,27 @@
 # protocol, which is specified here
 # https://github.com/VDA5050/VDA5050/blob/main/VDA5050_EN.md
 
-# Enum {AUTOACK,MANUAL,REMOTE,NONE}
-# Acknowledge-Type of eStop:
-# AUTOACK: auto-acknowledgeable e-stop is activated, e.g., by bumper or
-# protective field.
-# MANUAL: e-stop hast to be acknowledged manually at the vehicle.
-# REMOTE: facility e-stop has to be acknowledged remotely.
-# NONE: no e-stop activated.
-string e_stop
+# [m/s] Minimal controlled continuous speed of the
+# AGV.
+float64 speed_min
 
-# Protective field violation.
-# "true":field is violated
-# "false":field is not violated.
-bool field_violation
+# [m/s] Maximum speed of the AGV
+float64 speed_max
 
-# Enums for eStop
-string AUTO_ACK="AUTOACK"
-string MANUAL="MANUAL"
-string REMOTE="REMOTE"
-string NONE="NONE"
+# [m/s²] Maximum acceleration with maximum load.
+float64 acceleration_max
+
+# [m/s²] Maximum deceleration with maximum load.
+float64 deceleration_max
+
+# [m] Minimum height of AGV.
+float64 height_min
+
+# [m] Maximum height of AGV.
+float64 height_max
+
+# [m] Width of AGV.
+float64 width
+
+# [m] Length of AGV.
+float64 length

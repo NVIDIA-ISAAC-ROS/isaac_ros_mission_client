@@ -21,7 +21,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>isaac_ros_vda5050_nav2_client_bringup</name>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <description>Vda5050 Messages</description>
   <maintainer email="isaac-ros-maintainers@nvidia.com">Isaac ROS Maintainers</maintainer>
   <license>NVIDIA Isaac ROS Software License</license>
@@ -29,6 +29,7 @@
   <build_depend>isaac_ros_vda5050_nav2_client</build_depend>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
+  <build_depend>isaac_ros_common</build_depend>
 
   <exec_depend>nav2_amcl</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>

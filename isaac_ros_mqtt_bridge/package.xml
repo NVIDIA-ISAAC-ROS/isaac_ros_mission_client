@@ -21,16 +21,19 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>isaac_ros_mqtt_bridge</name>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <description>MQTT Bridge</description>
   <maintainer email="isaac-ros-maintainers@nvidia.com">Isaac ROS Maintainers</maintainer>
   <license>Apache-2.0</license>
+  <build_depend>isaac_ros_common</build_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
   <test_depend>isaac_ros_test</test_depend>
+
+  <depend>vda5050_msgs</depend>
 
   <export>
     <build_type>ament_python</build_type>

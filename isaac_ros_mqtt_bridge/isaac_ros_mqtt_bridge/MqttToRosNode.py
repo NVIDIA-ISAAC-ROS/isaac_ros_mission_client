@@ -49,12 +49,13 @@ class MqttToRosNode(Node):
                 ('major_version', 'v2'),
                 ('manufacturer', 'RobotCompany'),
                 ('serial_number', 'carter01'),
-                ('mqtt_client_name', 'MqttBridge'),
                 ('mqtt_host_name', 'localhost'),
                 ('mqtt_port', 1883),
                 ('mqtt_transport', 'tcp'),
                 ('mqtt_ws_path', ''),
                 ('mqtt_keep_alive', 60),
+                ('mqtt_username', ''),
+                ('mqtt_password', ''),
                 ('ros_publisher_type', 'vda5050_msgs/Action'),
                 ('ros_publisher_queue', 10),
                 ('convert_camel_to_snake', True),
@@ -65,12 +66,17 @@ class MqttToRosNode(Node):
         )
 
         self.mqtt_client = mqtt.Client(
-            self.get_parameter('mqtt_client_name').value,
+            self.get_parameter('serial_number').value + '_mqtt_to_ros',
             transport=self.get_parameter('mqtt_transport').value)
 
         if self.get_parameter('mqtt_transport').value == 'websockets' and \
                 self.get_parameter('mqtt_ws_path').value != '':
             self.mqtt_client.ws_set_options(path=self.get_parameter('mqtt_ws_path').value)
+
+        if self.get_parameter('mqtt_username').value != '' and \
+                self.get_parameter('mqtt_password').value != '':
+            self.mqtt_client.username_pw_set(username=self.get_parameter('mqtt_username').value,
+                                             password=self.get_parameter('mqtt_password').value)
 
         self.interface_name = self.get_parameter('interface_name').value
         self.major_version = self.get_parameter('major_version').value
