@@ -52,7 +52,7 @@ A Quickstart with Isaac Sim is [here](https://nvidia-isaac-ros.github.io/concept
 
 ## Latest
 
-Update 2024-09-26: Update for Isaac ROS 3.1
+Update 2024-12-10: Added actions to support object pick and place
 
 ## Contributors
 

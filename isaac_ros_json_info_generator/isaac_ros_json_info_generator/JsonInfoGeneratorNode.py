@@ -62,7 +62,7 @@ class JsonInfoGeneratorNode(Node):
             'ros_subscriber_topics').value
         # The number of values in `ros_subscriber_types` should equal the
         # number of values in `ros_subscriber_topics`
-        assert(len(ros_subscriber_types) == len(ros_subscriber_topics))
+        assert len(ros_subscriber_types) == len(ros_subscriber_topics)
         # Create a subscriber for each pair of subscriber type and topic given
         # in the `ros_subscriber_types` and `ros_subscriber_topics` parameters
         for i in range(len(ros_subscriber_types)):

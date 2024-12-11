@@ -318,6 +318,9 @@ class Nav2ClientTest(IsaacROSBaseTest):
             rclpy.spin_once(self.node, timeout_sec=(0.1))
             if self.is_order_completed(received_messages, '1'):
                 break
+        # spin twice for the order to complete
+        rclpy.spin_once(self.node, timeout_sec=(0.1))
+        rclpy.spin_once(self.node, timeout_sec=(0.1))
         self.assertGreater(len(received_messages[ORDER_INFO_TOPIC]), 0,
                            'Appropriate output not received')
         self.verify_results(received_messages, expected_teleop)

@@ -56,8 +56,18 @@
 #include "vda5050_msgs/msg/node.hpp"
 #include "vda5050_msgs/msg/edge_state.hpp"
 #include "vda5050_msgs/msg/instant_actions.hpp"
+#include "vda5050_msgs/msg/factsheet.hpp"
+#include "vision_msgs/msg/detection2_d.hpp"
+#include "vision_msgs/msg/detection2_d_array.hpp"
+#include "vision_msgs/msg/detection3_d.hpp"
+#include "vision_msgs/msg/detection3_d_array.hpp"
+#include "vision_msgs/msg/object_hypothesis_with_pose.hpp"
 
 #include "isaac_ros_vda5050_nav2_client/action/mission_action.hpp"
+#include "isaac_manipulator_interfaces/action/get_objects.hpp"
+#include "isaac_manipulator_interfaces/action/pick_and_place.hpp"
+#include "isaac_manipulator_interfaces/msg/object_info.hpp"
+#include "isaac_manipulator_interfaces/srv/clear_objects.hpp"
 #include "opennav_docking_msgs/action/dock_robot.hpp"
 #include "opennav_docking_msgs/action/undock_robot.hpp"
 
@@ -86,6 +96,16 @@ public:
     opennav_docking_msgs::action::UndockRobot;
   using GoalHandleUndockAction = rclcpp_action::ClientGoalHandle<UndockAction>;
 
+  using GetObjectsAction =
+    isaac_manipulator_interfaces::action::GetObjects;
+  using GoalHandleGetObjectsAction = rclcpp_action::ClientGoalHandle<GetObjectsAction>;
+
+  using PickPlaceAction =
+    isaac_manipulator_interfaces::action::PickAndPlace;
+  using GoalHandlePickPlaceAction = rclcpp_action::ClientGoalHandle<PickPlaceAction>;
+
+  using ClearObjectsService = isaac_manipulator_interfaces::srv::ClearObjects;
+
   explicit Vda5050toNav2ClientNode(const rclcpp::NodeOptions & options);
 
   ~Vda5050toNav2ClientNode();
@@ -95,7 +115,9 @@ private:
   GoalHandleNavThroughPoses::SharedPtr nav_goal_handle_;
 
   rclcpp::Publisher<vda5050_msgs::msg::AGVState>::SharedPtr order_info_pub_;
+  rclcpp::Publisher<vda5050_msgs::msg::Factsheet>::SharedPtr factsheet_info_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr order_id_pub_;
+
   rclcpp::Subscription<vda5050_msgs::msg::Order>::SharedPtr order_sub_;
   rclcpp::Subscription<vda5050_msgs::msg::InstantActions>::SharedPtr
     instant_actions_sub_;
@@ -117,6 +139,10 @@ private:
   rclcpp::executors::SingleThreadedExecutor executor_;
   // Publish a vda5050_msgs/AGVState based on the current state of the robot
   void PublishRobotState();
+
+  // Publish a vda5050_msgs/Factsheet based on the robot's sepcifications
+  void PublishRobotFactsheet();
+
   // Timer callback function to publish a vda5050_msgs/AGVState message
   void StateTimerCallback();
   // Timer callback function to publish a std_msgs/String message containing the order_id
@@ -134,7 +160,7 @@ private:
   // Update action status and description based on the action id
   void UpdateActionState(
     const size_t & action_state_idx, const std::string & status,
-    const std::string & action_description = {});
+    const std::string & result_description = "", const int & error_code = 0);
   // Initialization the order state once received a new order
   void InitAGVState();
   // The callback function when the node receives a vda5050_msgs/Order message and processes it
@@ -168,21 +194,20 @@ private:
   template<typename ResultType>
   void ActionResultCallback(
     const ResultType & result,
+    const bool & success,
     const size_t & action_state_idx,
-    const std::string & description = "");
+    const std::string & description = "",
+    const int & error_code = 0);
   void CancelOrder();
   void UpdateActionStatebyId(const std::string & action_id, const std::string & action_status);
   void InstantActionsCallback(const vda5050_msgs::msg::InstantActions::ConstSharedPtr msg);
   // Handle teleop instant actions
   void TeleopActionHandler(const vda5050_msgs::msg::Action & teleop_action);
+  // Handle factsheet instant actions
+  void FactsheetRequestHandler(const vda5050_msgs::msg::Action & factsheet_request);
   // The callback function when the node receives an order error message.
   void OrderValidErrorCallback(const std_msgs::msg::String::ConstSharedPtr msg);
-  // The callback function for switch service result
-  void SwitchServiceCallback(
-    rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future,
-    const size_t action_state_idx,
-    const DockAction::Goal & goal_msg,
-    const rclcpp_action::Client<DockAction>::SendGoalOptions & send_goal_options);
+  void getObjectsActionHandler();
   // Sync service request. Return request result
   template<typename ServiceT>
   typename ServiceT::Response::SharedPtr SendServiceRequest(
@@ -194,6 +219,12 @@ private:
   bool SendBoolRequest(
     typename rclcpp::Client<ServiceT>::SharedPtr client,
     typename ServiceT::Request::SharedPtr request);
+
+  void pickPlaceActionHandler(
+    std::unordered_map<std::string, std::string> & action_parameters_map);
+
+  void clearObjectsHandler(
+    std::unordered_map<std::string, std::string> & action_parameters_map);
 
   // The length of a period before the client publishes the robot state and mission status messages
   // (in seconds)
@@ -223,6 +254,8 @@ private:
   vda5050_msgs::msg::Order::ConstSharedPtr current_order_;
   // Order information for feedback of the mission
   vda5050_msgs::msg::AGVState::SharedPtr agv_state_;
+  // Factsheet information for robot
+  vda5050_msgs::msg::Factsheet::SharedPtr factsheet_;
   // Cancel action
   vda5050_msgs::msg::Action::SharedPtr cancel_action_;
   // Reached current waypoint flag
@@ -243,10 +276,15 @@ private:
   std::unordered_map<std::string, rclcpp_action::Client<MissionAction>::SharedPtr> action_clients_;
   rclcpp_action::Client<DockAction>::SharedPtr dock_client_;
   rclcpp_action::Client<UndockAction>::SharedPtr undock_client_;
+  rclcpp_action::Client<GetObjectsAction>::SharedPtr get_objects_client_;
+  rclcpp_action::Client<PickPlaceAction>::SharedPtr pick_and_place_client_;
+  rclcpp::Client<ClearObjectsService>::SharedPtr clear_objects_client_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   // True if current order is canceled
   bool current_order_canceled_;
+
+  std::string robot_type_;
 };
 
 }  // namespace mission_client

@@ -21,7 +21,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>isaac_ros_vda5050_nav2_client</name>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <description>Mission client communicating with Navigation2</description>
   <maintainer email="isaac-ros-maintainers@nvidia.com">Isaac ROS Maintainers</maintainer>
   <license>Apache-2.0</license>
@@ -42,8 +42,11 @@
   <depend>isaac_ros_json_info_generator</depend>
   <depend>action_msgs</depend>
   <depend>opennav_docking_msgs</depend>
+  <depend>vision_msgs</depend>
+  <depend>isaac_manipulator_interfaces</depend>
   <depend>std_srvs</depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <build_depend>isaac_ros_common</build_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>

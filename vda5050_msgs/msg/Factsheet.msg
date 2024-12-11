@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,22 +19,25 @@
 # protocol, which is specified here
 # https://github.com/VDA5050/VDA5050/blob/main/VDA5050_EN.md
 
-# Enum {AUTOACK,MANUAL,REMOTE,NONE}
-# Acknowledge-Type of eStop:
-# AUTOACK: auto-acknowledgeable e-stop is activated, e.g., by bumper or
-# protective field.
-# MANUAL: e-stop hast to be acknowledged manually at the vehicle.
-# REMOTE: facility e-stop has to be acknowledged remotely.
-# NONE: no e-stop activated.
-string e_stop
+# Header ID of the message. The headerId is defined per topic and incremented
+# by 1 with each sent (but not necessarily received) message.
+int32 header_id
 
-# Protective field violation.
-# "true":field is violated
-# "false":field is not violated.
-bool field_violation
+# Timestamp after ISO8601 in the format YYYY-MM-DDTHH:mm:ss.ssZ
+# (e.g.“2017-04-15T11:40:03.12Z”)
+string timestamp
 
-# Enums for eStop
-string AUTO_ACK="AUTOACK"
-string MANUAL="MANUAL"
-string REMOTE="REMOTE"
-string NONE="NONE"
+# Version of the protocol [Major].[Minor].[Patch] (e.g. 1.3.2)
+string version
+
+# Manufacturer of the AGV
+string manufacturer
+
+# Serial Number of the AGV
+string serial_number
+
+# Type Specification of the AGV
+vda5050_msgs/TypeSpecification type_specification
+
+# Physical Parameters of the AGC
+vda5050_msgs/PhysicalParameters physical_parameters

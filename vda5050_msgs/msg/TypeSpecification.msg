@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,22 +19,25 @@
 # protocol, which is specified here
 # https://github.com/VDA5050/VDA5050/blob/main/VDA5050_EN.md
 
-# Enum {AUTOACK,MANUAL,REMOTE,NONE}
-# Acknowledge-Type of eStop:
-# AUTOACK: auto-acknowledgeable e-stop is activated, e.g., by bumper or
-# protective field.
-# MANUAL: e-stop hast to be acknowledged manually at the vehicle.
-# REMOTE: facility e-stop has to be acknowledged remotely.
-# NONE: no e-stop activated.
-string e_stop
+# Series Name of the AGV
+string series_name
 
-# Protective field violation.
-# "true":field is violated
-# "false":field is not violated.
-bool field_violation
+# Series Description of the AGV
+# Optional: This field can be ommitted
+string series_description
 
-# Enums for eStop
-string AUTO_ACK="AUTOACK"
-string MANUAL="MANUAL"
-string REMOTE="REMOTE"
-string NONE="NONE"
+# Simplified description of AGV kinematics-type.
+string agv_kinematics
+
+# Simplified description of AGV class.
+string agv_class
+
+# [kg], Maximum loadable mass.
+float64 max_load_mass
+
+# Simplified description of localization type.
+string[] localization_types
+
+# List of path planning types supported by the
+# AGV, sorted by priority
+string[] navigation_types

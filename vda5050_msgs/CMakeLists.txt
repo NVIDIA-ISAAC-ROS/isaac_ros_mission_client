@@ -61,6 +61,9 @@ set(msg_files
     "msg/Trajectory.msg"
     "msg/Velocity.msg"
     "msg/InstantActions.msg"
+    "msg/Factsheet.msg"
+    "msg/PhysicalParameters.msg"
+    "msg/TypeSpecification.msg"
 )
 
 find_package(rosidl_default_generators REQUIRED)
@@ -75,5 +78,11 @@ if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+
+# Embed versioning information into installed files
+ament_index_get_resource(ISAAC_ROS_COMMON_CMAKE_PATH isaac_ros_common_cmake_path isaac_ros_common)
+include("${ISAAC_ROS_COMMON_CMAKE_PATH}/isaac_ros_common-version-info.cmake")
+generate_version_info(${PROJECT_NAME})
 
 ament_auto_package()

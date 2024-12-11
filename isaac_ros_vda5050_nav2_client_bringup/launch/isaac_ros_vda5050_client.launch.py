@@ -15,11 +15,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 
 def generate_launch_description():
@@ -32,6 +36,10 @@ def generate_launch_description():
         DeclareLaunchArgument('mqtt_transport', default_value='tcp',
                               description='Protocol for MQTT messages to be sent (pass either tcp'
                                           'or websockets)'),
+        DeclareLaunchArgument('mqtt_username', default_value='',
+                              description='Username to authenticate to MQTT broker'),
+        DeclareLaunchArgument('mqtt_password', default_value='',
+                              description='Password to authenticate to MQTT broker'),
         DeclareLaunchArgument('interface_name', default_value='uagv',
                               description='Name of the used interface. Used to construct mqtt '
                                           'topic names.'),
@@ -43,12 +51,8 @@ def generate_launch_description():
                               description='Unique AGV Serial Number'),
         DeclareLaunchArgument('ros_subscriber_type', default_value='vda5050_msgs/AGVState',
                               description='ROS message type to convert to outgoing MQTT message'),
-        DeclareLaunchArgument('ros_to_mqtt_name', default_value='Carter01_RosToMqttBridge',
-                              description='MQTT client name for RosToMqtt Node'),
         DeclareLaunchArgument('ros_publisher_type', default_value='vda5050_msgs/Order',
                               description='ROS message type to convert received MQTT message to'),
-        DeclareLaunchArgument('mqtt_to_ros_name', default_value='Carter01_MqttToRosBridge',
-                              description='MQTT client name for MqttToRos Node'),
         DeclareLaunchArgument('mqtt_port', default_value='1883',
                               description='The port of the MQTT message broker to connect to'),
         DeclareLaunchArgument('retry_forever', default_value='true',
@@ -66,17 +70,21 @@ def generate_launch_description():
                               description='Pause the docking server in initialization'),
         DeclareLaunchArgument('odom_topic', default_value='/chassis/odom',
                               description='The topic that publishes nav_msgs/Odometry message.'),
+        DeclareLaunchArgument('robot_type', default_value='amr',
+                              description='The type of robot we are inspecting (arm or amr)'),
         DeclareLaunchArgument('battery_state_topic', default_value='/chassis/battery_state',
                               description='The topic that publishes battery state message.'),
+        DeclareLaunchArgument('launch_ws_bridge', default_value='False',
+                              description='Launch rosbridge websocket if set to True.'),
     ]
 
     namespace = LaunchConfiguration('namespace')
     mqtt_host_name = LaunchConfiguration('mqtt_host_name')
     mqtt_transport = LaunchConfiguration('mqtt_transport')
+    mqtt_username = LaunchConfiguration('mqtt_username')
+    mqtt_password = LaunchConfiguration('mqtt_password')
     ros_subscriber_type = LaunchConfiguration('ros_subscriber_type')
-    ros_to_mqtt_name = LaunchConfiguration('ros_to_mqtt_name')
     ros_publisher_type = LaunchConfiguration('ros_publisher_type')
-    mqtt_to_ros_name = LaunchConfiguration('mqtt_to_ros_name')
     mqtt_port = LaunchConfiguration('mqtt_port')
     retry_forever = LaunchConfiguration('retry_forever')
     reconnect_period = LaunchConfiguration('reconnect_period')
@@ -88,6 +96,7 @@ def generate_launch_description():
     serial_number = LaunchConfiguration('serial_number')
     docking_server_enabled = LaunchConfiguration('docking_server_enabled')
     odom_topic = LaunchConfiguration('odom_topic')
+    robot_type = LaunchConfiguration('robot_type')
     battery_state_topic = LaunchConfiguration('battery_state_topic')
 
     client_node = Node(
@@ -103,6 +112,7 @@ def generate_launch_description():
             'load_cloud_map_action': ['load_map'],
             'docking_server_enabled': docking_server_enabled,
             'odom_topic': odom_topic,
+            'robot_type': robot_type,
             'battery_state_topic': battery_state_topic,
         }],
         output='screen'
@@ -115,12 +125,13 @@ def generate_launch_description():
         parameters=[{
             'mqtt_host_name': mqtt_host_name,
             'mqtt_transport': mqtt_transport,
+            'mqtt_username': mqtt_username,
+            'mqtt_password': mqtt_password,
             'interface_name': interface_name,
             'major_version': major_version,
             'manufacturer': manufacturer,
             'serial_number': serial_number,
             'ros_subscriber_type': ros_subscriber_type,
-            'mqtt_client_name': ros_to_mqtt_name,
             'mqtt_port': mqtt_port,
             'retry_forever': retry_forever,
             'reconnect_period': reconnect_period,
@@ -138,12 +149,13 @@ def generate_launch_description():
         parameters=[{
             'mqtt_host_name': mqtt_host_name,
             'mqtt_transport': mqtt_transport,
+            'mqtt_username': mqtt_username,
+            'mqtt_password': mqtt_password,
             'interface_name': interface_name,
             'major_version': major_version,
             'manufacturer': manufacturer,
             'serial_number': serial_number,
             'ros_publisher_type': ros_publisher_type,
-            'mqtt_client_name': mqtt_to_ros_name,
             'mqtt_port': mqtt_port,
             'retry_forever': retry_forever,
             'reconnect_period': reconnect_period,
@@ -164,10 +176,20 @@ def generate_launch_description():
         condition=IfCondition(ros_recorder)
     )
 
+    rosbridge_server_launch_dir = os.path.join(
+        get_package_share_directory('rosbridge_server'), 'launch')
+    rosbridge_server_launch = IncludeLaunchDescription(
+        XMLLaunchDescriptionSource([rosbridge_server_launch_dir,
+                                    '/rosbridge_websocket_launch.xml']),
+        launch_arguments={'namespace': namespace}.items(),
+        condition=IfCondition(LaunchConfiguration('launch_ws_bridge'))
+    )
+
     return LaunchDescription(launch_args +
                              [
                                  client_node,
                                  ros_mqtt_bridge_node,
                                  mqtt_ros_bridge_node,
                                  recorder_node,
+                                 rosbridge_server_launch
                              ])

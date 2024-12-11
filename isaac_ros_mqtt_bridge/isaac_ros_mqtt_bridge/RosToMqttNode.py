@@ -48,12 +48,13 @@ class RosToMqttNode(Node):
                 ('major_version', 'v2'),
                 ('manufacturer', 'RobotCompany'),
                 ('serial_number', 'carter01'),
-                ('mqtt_client_name', 'RosToMqttBridge'),
                 ('mqtt_host_name', 'localhost'),
                 ('mqtt_port', 1883),
                 ('mqtt_transport', 'tcp'),
                 ('mqtt_ws_path', ''),
                 ('mqtt_keep_alive', 60),
+                ('mqtt_username', ''),
+                ('mqtt_password', ''),
                 ('ros_subscriber_type', 'vda5050_msgs/NodeState'),
                 ('ros_subscriber_queue', 1),
                 ('convert_snake_to_camel', True),
@@ -64,12 +65,17 @@ class RosToMqttNode(Node):
         )
 
         self.mqtt_client = mqtt.Client(
-            self.get_parameter('mqtt_client_name').value,
+            self.get_parameter('serial_number').value + '_ros_to_mqtt',
             transport=self.get_parameter('mqtt_transport').value)
 
         if self.get_parameter('mqtt_transport').value == 'websockets' and \
                 self.get_parameter('mqtt_ws_path').value != '':
             self.mqtt_client.ws_set_options(path=self.get_parameter('mqtt_ws_path').value)
+
+        if self.get_parameter('mqtt_username').value != '' and \
+                self.get_parameter('mqtt_password').value != '':
+            self.mqtt_client.username_pw_set(username=self.get_parameter('mqtt_username').value,
+                                             password=self.get_parameter('mqtt_password').value)
 
         self.interface_name = self.get_parameter('interface_name').value
         self.major_version = self.get_parameter('major_version').value
@@ -92,6 +98,11 @@ class RosToMqttNode(Node):
             ros_loader.get_message_class(
                 self.get_parameter('ros_subscriber_type').value),
             'ros_sub_topic', self.__ros_subscriber_callback,
+            self.get_parameter('ros_subscriber_queue').value)
+
+        self.factsheet_subscription = self.create_subscription(
+            ros_loader.get_message_class('vda5050_msgs/Factsheet'),
+            'factsheet', self.__ros_factsheet_subscriber_callback,
             self.get_parameter('ros_subscriber_queue').value)
 
         max_retries = self.get_parameter('num_retries').value
@@ -133,6 +144,21 @@ class RosToMqttNode(Node):
                     json.dumps(convert_dict_keys(extracted, 'snake_to_dromedary')))
             else:
                 self.mqtt_client.publish(f'{self.mqtt_topic_prefix}/state', json.dumps(extracted))
+        except (message_conversion.FieldTypeMismatchException,
+                json.decoder.JSONDecodeError) as e:
+            self.get_logger().info(repr(e))
+
+    def __ros_factsheet_subscriber_callback(self, msg):
+        try:
+            extracted = message_conversion.extract_values(msg)
+            if self.get_parameter('convert_snake_to_camel').value:
+                self.mqtt_client.publish(
+                    f'{self.mqtt_topic_prefix}/factsheet',
+                    json.dumps(convert_dict_keys(extracted, 'snake_to_dromedary')))
+            else:
+                self.mqtt_client.publish(
+                    f'{self.mqtt_topic_prefix}/factsheet',
+                    json.dumps(extracted))
         except (message_conversion.FieldTypeMismatchException,
                 json.decoder.JSONDecodeError) as e:
             self.get_logger().info(repr(e))

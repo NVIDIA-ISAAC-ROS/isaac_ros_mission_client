@@ -143,11 +143,12 @@ velocity_smoother:
     velocity_timeout: 1.0
     # max_accel: [1.0, 0.0, 1.25]
     # max_decel: [-1.0, 0.0, -1.25]
-    odom_topic: "odom"
+    odom_topic: /chassis/odom
     odom_duration: 0.1
 
 controller_server:
   ros__parameters:
+    odom_topic: /chassis/odom
     use_sim_time: True
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
