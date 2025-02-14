@@ -12,7 +12,7 @@ Learn more about missions by watching our on-demand webinar: [Build Connected Ro
 
 ## Overview
 
-[Isaac ROS Mission Client](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_mission_client) provides the ROS 2 packages for Mission Client, which
+Isaac ROS Mission Client provides the ROS 2 packages for Mission Client, which
 communicates to a robot fleet management service. Mission Client
 receives tasks and actions from the fleet management service and updates
 its progress, state, and errors. Mission Client performs navigation
