@@ -40,6 +40,7 @@ find_package(isaac_ros_vda5050_nav2_client REQUIRED)
 ament_auto_find_build_dependencies()
 
 install(DIRECTORY
+  behavior_trees
   config
   launch
   maps
